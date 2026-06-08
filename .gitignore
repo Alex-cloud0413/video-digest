@@ -1,0 +1,21 @@
+# Secrets — your real keys live here, never commit them
+config.js
+
+# OS / editor cruft
+.DS_Store
+
+# Planning / intermediate files (kept local, not published)
+architecture.excalidraw
+explainer-video/
+
+# Tooling & agent workspaces
+.agents/
+.augment/
+.claude/
+skills/
+skills-lock.json
+.playwright-mcp/
+node_modules/
+
+# Environment
+.env

@@ -1,0 +1,1410 @@
+/*
+ * SIDE PANEL STYLES — Bold Brutalist Aesthetic (Light Mode)
+ *
+ * Design philosophy:
+ * - Heavy, unapologetic typography
+ * - High contrast (light backgrounds, dark text)
+ * - Red (#e63946) as the only accent color
+ * - No rounded corners — everything is sharp and angular
+ * - Thick borders and dividers
+ * - Monospace for timestamps and technical data
+ * - Uppercase headings that demand attention
+ * - Raw, zine-like energy meets Swiss design precision
+ */
+
+/* ============================================================
+   CSS VARIABLES (design tokens)
+   Light mode version
+   ============================================================ */
+:root {
+  --bg: #faf9f7;
+  --surface: #ffffff;
+  --surface-raised: #f5f4f2;
+  --border: #e0ddd8;
+  --border-heavy: #ccc9c4;
+  --text: #1a1a1a;
+  --text-secondary: #555555;
+  --text-muted: #888888;
+  --accent: #e63946;
+  --accent-dim: rgba(230, 57, 70, 0.1);
+  --accent-hover: #d62839;
+  --highlight: #f4a261;
+  --success: #2a9d8f;
+  --font-display: 'Bebas Neue', 'Impact', 'Arial Black', sans-serif;
+  --font-body: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  --font-reading: 'Space Grotesk', 'Helvetica Neue', sans-serif;
+}
+
+/* ============================================================
+   RESET & BASE
+   ============================================================ */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar — minimal, on-theme */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-heavy);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+.header {
+  padding: 20px 20px 0;
+  border-bottom: 3px solid var(--accent);
+  background: var(--surface);
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.header-logo {
+  font-family: var(--font-display);
+  font-size: 28px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-logo .accent-dot {
+  width: 10px;
+  height: 10px;
+  background: var(--accent);
+  display: inline-block;
+}
+
+/* Language selector — brutalist dropdown */
+.lang-selector-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lang-selector {
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 4px 24px 4px 8px;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  /* Custom dropdown arrow using a CSS triangle via background-image */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.lang-selector:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Keep a red border when a non-English language is active — visual indicator */
+.lang-selector.active-lang {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Small spinning indicator shown during translation API calls */
+.lang-spinner {
+  display: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  animation: langSpin 0.6s linear infinite;
+}
+
+.lang-spinner.visible {
+  display: block;
+}
+
+@keyframes langSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* Tab navigation */
+.tabs {
+  display: flex;
+  gap: 0;
+  margin-top: 16px;
+}
+
+.tab {
+  flex: 1;
+  padding: 10px 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.15s;
+}
+
+.tab:hover {
+  color: var(--text-secondary);
+}
+
+.tab.active {
+  color: var(--accent);
+}
+
+.tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -3px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--accent);
+}
+
+/* ============================================================
+   CONTENT AREA
+   ============================================================ */
+.content {
+  padding: 20px;
+  overflow-y: auto;
+  height: calc(100vh - 140px);
+}
+
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.active {
+  display: block;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SUMMARY BOX — The main insight at the top
+   ============================================================ */
+.summary-box {
+  border: 2px solid var(--border);
+  border-left: 6px solid var(--accent);
+  padding: 20px;
+  margin-bottom: 24px;
+  background: var(--surface);
+}
+
+.summary-text {
+  font-family: var(--font-reading);
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+/* ============================================================
+   WORTH WATCHING IF — The 3 bullet points
+   ============================================================ */
+.worth-section {
+  margin-bottom: 24px;
+}
+
+.worth-label {
+  font-family: var(--font-display);
+  font-size: 16px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+
+.worth-list {
+  list-style: none;
+}
+
+.worth-item {
+  font-family: var(--font-reading);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  padding: 10px 0 10px 20px;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+.worth-item::before {
+  content: '→';
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  font-weight: bold;
+}
+
+.worth-item:last-child {
+  border-bottom: none;
+}
+
+/* ============================================================
+   TAGS
+   ============================================================ */
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.tag {
+  font-family: var(--font-body);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  background: var(--surface);
+}
+
+/* ============================================================
+   SECTION TITLES
+   ============================================================ */
+.section {
+  margin-bottom: 28px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--border);
+}
+
+.section-header .section-title {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--border);
+}
+
+/* Enhance button */
+.enhance-btn {
+  font-family: var(--font-body);
+  font-size: 11px;
+  padding: 6px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.enhance-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.enhance-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.transcript-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* ============================================================
+   REMIX TAB
+   ============================================================ */
+.remix-intro {
+  font-family: var(--font-reading);
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+.remix-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.remix-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.remix-option:hover {
+  border-color: var(--accent);
+}
+
+.remix-option.active {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.remix-option-radio {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.remix-option.active .remix-option-radio {
+  border-color: var(--accent);
+}
+
+.remix-option.active .remix-option-radio::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: var(--accent);
+  border-radius: 50%;
+}
+
+.remix-option-content {
+  flex: 1;
+}
+
+.remix-option-name {
+  font-family: var(--font-reading);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.remix-option-desc {
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.remix-option-btn {
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 8px 16px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.remix-option:hover .remix-option-btn,
+.remix-option.active .remix-option-btn {
+  opacity: 1;
+}
+
+.remix-option-btn:hover {
+  background: var(--accent-hover);
+}
+
+.remix-output {
+  border: 2px solid var(--border);
+  background: var(--surface);
+}
+
+.remix-output-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+
+.remix-output-title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.remix-output-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.remix-content {
+  padding: 20px;
+  font-family: var(--font-reading);
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text);
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.remix-loading {
+  padding: 40px;
+  text-align: center;
+}
+
+/* ============================================================
+   CHAPTERS
+   ============================================================ */
+.chapter-list {
+  list-style: none;
+}
+
+.chapter-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 2px solid var(--border);
+  margin-bottom: 8px;
+  transition: all 0.15s;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.chapter-item:hover {
+  border-color: var(--accent);
+  background: var(--surface-raised);
+}
+
+.chapter-timestamp {
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--accent);
+  min-width: 48px;
+  padding: 2px 8px;
+  background: var(--accent-dim);
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.chapter-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chapter-title {
+  font-family: var(--font-reading);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.chapter-summary {
+  font-family: var(--font-reading);
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* ============================================================
+   KEY QUOTES
+   ============================================================ */
+.quote-item {
+  border-left: 4px solid var(--accent);
+  padding: 16px;
+  margin-bottom: 16px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.quote-item:hover {
+  background: var(--surface-raised);
+  border-left-color: var(--accent-hover);
+}
+
+.quote-text {
+  font-family: var(--font-reading);
+  font-size: 14px;
+  font-style: italic;
+  line-height: 1.6;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+
+.quote-text::before {
+  content: '\201C';
+  font-family: var(--font-display);
+  font-size: 32px;
+  color: var(--accent);
+  line-height: 0;
+  vertical-align: -8px;
+  margin-right: 4px;
+}
+
+.quote-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quote-timestamp {
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--accent);
+  padding: 2px 8px;
+  background: var(--accent-dim);
+}
+
+/* ============================================================
+   TRANSCRIPT TAB
+   ============================================================ */
+
+/* Small badge showing where the transcript came from */
+.transcript-source-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-body);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  padding: 6px 0;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Colored dot indicator */
+.source-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+}
+
+/* Green dot = subtitles (reliable source) */
+.source-dot--subs {
+  background: #2d9d4e;
+}
+
+/* Blue dot = YouTube auto-generated captions */
+.source-dot--auto {
+  background: #3b82f6;
+}
+
+/* Orange dot = AI transcribed (may have minor inaccuracies) */
+.source-dot--ai {
+  background: #e89b1e;
+}
+
+.transcript-entry {
+  display: flex;
+  gap: 12px;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+  cursor: pointer;
+}
+
+.transcript-entry:hover {
+  background: var(--surface-raised);
+}
+
+.transcript-time {
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--accent);
+  min-width: 48px;
+  padding-top: 2px;
+  flex-shrink: 0;
+}
+
+.transcript-text {
+  font-family: var(--font-reading);
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* Enhanced transcript paragraphs */
+.transcript-paragraph {
+  font-family: var(--font-reading);
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.8;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.transcript-paragraph:last-child {
+  border-bottom: none;
+}
+
+/* Paragraph waiting to be translated — shows original text dimmed */
+.transcript-paragraph.translating {
+  color: var(--text-muted);
+  position: relative;
+}
+
+/* Small pulsing bar at the top of each untranslated paragraph */
+.transcript-paragraph.translating::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 40px;
+  height: 2px;
+  background: var(--accent);
+  opacity: 0.4;
+  animation: paraPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes paraPulse {
+  0%, 100% { opacity: 0.2; width: 40px; }
+  50% { opacity: 0.6; width: 80px; }
+}
+
+/* Paragraph that has been translated — fade in the result */
+.transcript-paragraph.translated {
+  animation: fadeIn 0.3s ease;
+}
+
+/* Translation states for raw transcript entries (with timestamps) */
+.transcript-entry.translating {
+  position: relative;
+}
+
+.transcript-entry.translating .transcript-text {
+  color: var(--text-muted);
+}
+
+/* Small pulsing bar at the bottom of each untranslated entry */
+.transcript-entry.translating::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 40px;
+  height: 2px;
+  background: var(--accent);
+  opacity: 0.4;
+  animation: paraPulse 1.2s ease-in-out infinite;
+}
+
+.transcript-entry.translated {
+  animation: fadeIn 0.3s ease;
+}
+
+/* Active playback highlight — shows which entry is currently playing */
+.transcript-entry.active-playback {
+  background: rgba(230, 57, 70, 0.06);
+  border-left: 3px solid var(--accent);
+}
+
+.transcript-entry.active-playback .transcript-time {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Follow playback button — floating at bottom, appears when user scrolls away */
+.follow-playback-btn {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  background: var(--accent);
+  color: white;
+  border: 2px solid var(--accent);
+  padding: 8px 20px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 0 2px 8px rgba(230, 57, 70, 0.3);
+}
+
+.follow-playback-btn:hover {
+  background: #d62839;
+}
+
+/* ============================================================
+   LOADING STATE
+   ============================================================ */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  gap: 24px;
+}
+
+.loading-bar {
+  width: 200px;
+  height: 4px;
+  background: var(--border);
+  position: relative;
+  overflow: hidden;
+}
+
+.loading-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 60%;
+  height: 100%;
+  background: var(--accent);
+  animation: loading 1.5s ease-in-out infinite;
+}
+
+@keyframes loading {
+  0% { left: -60%; }
+  100% { left: 100%; }
+}
+
+.loading-text {
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.loading-subtext {
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.6;
+}
+
+/* ============================================================
+   ERROR STATE
+   ============================================================ */
+.error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  text-align: center;
+  gap: 16px;
+  padding: 20px;
+}
+
+.error-icon {
+  font-size: 48px;
+  color: var(--accent);
+  font-family: var(--font-display);
+}
+
+.error-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.error-message {
+  font-family: var(--font-reading);
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  max-width: 280px;
+}
+
+.error-btn {
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 12px 28px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-top: 8px;
+}
+
+.error-btn:hover {
+  background: var(--accent-hover);
+}
+
+/* ============================================================
+   WELCOME STATE (no video detected)
+   ============================================================ */
+.welcome-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  text-align: center;
+  gap: 20px;
+  padding: 40px 20px;
+}
+
+.welcome-icon {
+  font-size: 64px;
+  line-height: 1;
+}
+
+.welcome-title {
+  font-family: var(--font-display);
+  font-size: 24px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+
+.welcome-desc {
+  font-family: var(--font-reading);
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  max-width: 260px;
+}
+
+/* ============================================================
+   SHARE / ACTIONS BAR
+   ============================================================ */
+.actions-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.action-btn {
+  flex: 1;
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+
+.action-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ============================================================
+   VIDEO TITLE IN SIDE PANEL
+   ============================================================ */
+.video-info {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+
+.video-title {
+  font-family: var(--font-reading);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
+  margin-bottom: 4px;
+  /* Truncate long titles */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.video-channel {
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ============================================================
+   MARKDOWN RENDERING IN REMIX
+   ============================================================ */
+.remix-content h2.remix-h2,
+.remix-content h3.remix-h3,
+.remix-content h4.remix-h4 {
+  font-family: var(--font-display);
+  letter-spacing: 1px;
+  margin: 24px 0 12px 0;
+  color: var(--text);
+}
+
+.remix-content h2.remix-h2 {
+  font-size: 22px;
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 8px;
+}
+
+.remix-content h3.remix-h3 {
+  font-size: 18px;
+  color: var(--accent);
+}
+
+.remix-content h4.remix-h4 {
+  font-size: 14px;
+  text-transform: uppercase;
+}
+
+.remix-content p {
+  margin-bottom: 16px;
+}
+
+.remix-content strong {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.remix-content em {
+  font-style: italic;
+}
+
+.remix-content blockquote.remix-quote {
+  border-left: 4px solid var(--accent);
+  padding: 12px 16px;
+  margin: 16px 0;
+  background: var(--surface-raised);
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.remix-content hr.remix-hr {
+  border: none;
+  height: 2px;
+  background: var(--border);
+  margin: 24px 0;
+}
+
+/* ============================================================
+   FULLSCREEN REMIX OVERLAY
+   ============================================================ */
+.fullscreen-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+
+.fullscreen-container {
+  width: 90%;
+  max-width: 700px;
+  max-height: 90vh;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+
+.fullscreen-header {
+  padding: 20px 24px;
+  border-bottom: 3px solid var(--accent);
+  background: var(--surface-raised);
+  flex-shrink: 0;
+}
+
+.fullscreen-title {
+  font-family: var(--font-display);
+  font-size: 24px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.fullscreen-meta {
+  font-family: var(--font-reading);
+  font-size: 13px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.fullscreen-dot {
+  color: var(--text-muted);
+}
+
+.fullscreen-close {
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 8px 16px;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.fullscreen-close:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.fullscreen-content {
+  padding: 32px;
+  overflow-y: auto;
+  flex: 1;
+  font-family: var(--font-reading);
+  font-size: 15px;
+  line-height: 1.9;
+  color: var(--text);
+}
+
+.fullscreen-content h2.remix-h2,
+.fullscreen-content h3.remix-h3,
+.fullscreen-content h4.remix-h4 {
+  font-family: var(--font-display);
+  letter-spacing: 1px;
+  margin: 28px 0 16px 0;
+}
+
+.fullscreen-content h2.remix-h2 {
+  font-size: 26px;
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 10px;
+}
+
+.fullscreen-content h3.remix-h3 {
+  font-size: 20px;
+  color: var(--accent);
+}
+
+.fullscreen-content p {
+  margin-bottom: 18px;
+}
+
+.fullscreen-content blockquote.remix-quote {
+  border-left: 4px solid var(--accent);
+  padding: 16px 20px;
+  margin: 20px 0;
+  background: var(--surface-raised);
+  font-style: italic;
+}
+
+/* ============================================================
+   EXPLAIN TOOLTIP & MODAL
+   ============================================================ */
+.explain-tooltip {
+  position: absolute;
+  z-index: 1000;
+  transform: translateX(-50%);
+  animation: fadeIn 0.15s ease;
+}
+
+.explain-btn {
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 8px 14px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(230, 57, 70, 0.3);
+  transition: all 0.15s;
+}
+
+.explain-btn:hover {
+  background: var(--accent-hover);
+  transform: scale(1.05);
+}
+
+.explain-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.2s ease;
+}
+
+.explain-modal {
+  width: 100%;
+  max-width: 400px;
+  max-height: 80vh;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+
+.explain-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 3px solid var(--accent);
+  background: var(--surface-raised);
+}
+
+.explain-modal-title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.explain-modal-close {
+  font-family: var(--font-body);
+  font-size: 12px;
+  padding: 4px 8px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.explain-modal-close:hover {
+  color: var(--accent);
+}
+
+.explain-selected-text {
+  padding: 16px 20px;
+  background: var(--accent-dim);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-reading);
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.explain-modal-content {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.explain-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 12px;
+}
+
+.explain-text {
+  font-family: var(--font-reading);
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+.explain-text p {
+  margin-bottom: 12px;
+}
+
+.explain-error {
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--accent);
+  padding: 16px;
+  background: var(--accent-dim);
+}
+
+/* ============================================================
+   NOTES TAB
+   ============================================================ */
+.notes-filter {
+  display: flex;
+  gap: 4px;
+}
+
+.notes-filter .enhance-btn {
+  padding: 4px 10px;
+  font-size: 10px;
+}
+
+.notes-filter .enhance-btn.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.notes-intro {
+  font-family: var(--font-reading);
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 40px 20px;
+  line-height: 1.6;
+}
+
+.note-item {
+  border: 2px solid var(--border);
+  padding: 14px;
+  margin-bottom: 12px;
+  background: var(--surface);
+  transition: border-color 0.15s;
+}
+
+.note-item:hover {
+  border-color: var(--accent);
+}
+
+.note-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.note-timestamp {
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--accent);
+  background: var(--accent-dim);
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.note-timestamp:hover {
+  background: var(--accent);
+  color: white;
+}
+
+.note-video-title {
+  font-family: var(--font-reading);
+  font-size: 11px;
+  color: var(--text-muted);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.note-delete {
+  font-family: var(--font-body);
+  font-size: 12px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  transition: color 0.15s;
+}
+
+.note-delete:hover {
+  color: var(--accent);
+}
+
+.note-text {
+  font-family: var(--font-reading);
+  font-size: 14px;
+  font-style: italic;
+  line-height: 1.6;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
+.note-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.note-action-btn {
+  font-family: var(--font-body);
+  font-size: 11px;
+  padding: 5px 10px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.note-action-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
