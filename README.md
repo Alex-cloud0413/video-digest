@@ -170,7 +170,22 @@ npm run package
 
 Before treating a change as ready, also reload the unpacked extension in Chrome and test several real YouTube watch pages. Automated checks do not prove that provider requests or live YouTube interactions work.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the manual test checklist and contribution workflow.
+## Contributing
+
+Search existing issues and pull requests before starting. Open an issue before a large feature, new permission, external service, or data-flow change. Keep changes focused, preserve the bring-your-own-key model, and never commit keys, private video URLs, transcript content, or user notes. Update this README and [PRIVACY.md](PRIVACY.md) when behavior, permissions, external recipients, or retention changes.
+
+When opening a pull request, include a concise problem and solution summary, user-visible and privacy impacts, permission or network-origin changes, and the automated and manual checks you ran. Remove private content from screenshots and logs.
+
+### Manual Chrome smoke checklist
+
+- Load a clean repository folder that does not contain `config.js`, then save and reopen the default DeepSeek settings.
+- Save a custom OpenAI-compatible origin and verify Chrome requests access. Deny the request once and confirm the extension reports the problem without calling the endpoint.
+- On several standard YouTube watch pages, open and close the panel, fetch transcripts, and confirm timestamps seek correctly.
+- Generate an overview, explain selected text, clean up a transcript, and test Original, 中文, and 双语 transcript modes.
+- Save, revisit, and delete a timestamped note. Reload the extension and navigate between videos to exercise YouTube SPA navigation.
+- Test invalid keys, missing transcripts, quota errors, and provider failures. Confirm no sensitive content appears in committed files, the ZIP, screenshots, or logs.
+
+External API smoke tests can consume quota or incur charges. Use provider accounts and test content you are authorized to use.
 
 ## License
 

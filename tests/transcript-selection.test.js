@@ -23,13 +23,13 @@ test("all timestamped transcript row clicks use the selection-aware seek helper"
   );
   assert.equal(
     guardedRowHandlers?.length,
-    3,
-    "raw, cleaned, and legacy translated rows must use the guard",
+    2,
+    "raw and cleaned rows must use the guard",
   );
   assert.match(
     source,
     /div\.addEventListener\("click", \(event\) =>\s+seekFromTranscriptEntryClick\(event, segment\.start\),\s+\);/,
-    "the new translated-only and bilingual row renderer must use the guard",
+    "translated-only and bilingual rows must use the guard",
   );
   assert.doesNotMatch(
     source,

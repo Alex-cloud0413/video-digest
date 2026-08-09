@@ -312,7 +312,7 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // We need to return true to indicate we'll respond asynchronously
   if (message.action === "fetchTranscript") {
-    handleFetchTranscript(message.videoId, message.videoUrl)
+    handleFetchTranscript(message.videoId)
       .then(sendResponse)
       .catch((err) => sendResponse({ error: err.message }));
     return true; // Keep the message channel open for async response
@@ -363,7 +363,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       message.timestamp,
       message.videoTitle,
       message.channelName,
-      message.videoUrl,
     )
       .then(sendResponse)
       .catch((err) => sendResponse({ success: false, error: err.message }));
@@ -612,11 +611,9 @@ async function getPlayerVideoDetails(tabId) {
  * API Docs: https://docs.supadata.ai
  *
  * @param {string} videoId - The YouTube video ID (e.g., "dQw4w9WgXcQ")
- * @param {string} videoUrl - Unused legacy argument; only the canonical video
- *   URL is shared with Supadata.
  * @returns {Object} - { success, transcript, transcriptText, language } or { success: false, error }
  */
-async function handleFetchTranscript(videoId, videoUrl) {
+async function handleFetchTranscript(videoId) {
   try {
     const settings = await getSettings();
     if (!settings.supadataApiKey) {
@@ -743,10 +740,6 @@ async function handleFetchTranscript(videoId, videoUrl) {
       transcriptText: transcriptTextPlain.trim(), // For display
       transcriptTextTimestamped: transcriptTextTimestamped.trim(), // For AI
       language: typeof data.lang === "string" ? data.lang : null,
-      availableLanguages: Array.isArray(data.availableLangs)
-        ? data.availableLangs
-        : [],
-      videoId: videoId,
     };
   } catch (error) {
     console.error("Transcript fetch error:", error);
@@ -821,9 +814,6 @@ async function pollTranscriptJob(jobId, supadataApiKey) {
         transcriptText: transcriptTextPlain.trim(),
         transcriptTextTimestamped: transcriptTextTimestamped.trim(),
         language: typeof data.lang === "string" ? data.lang : null,
-        availableLanguages: Array.isArray(data.availableLangs)
-          ? data.availableLangs
-          : [],
       };
     }
 
@@ -1355,7 +1345,6 @@ async function handleSaveNote(
   timestamp,
   videoTitle,
   channelName,
-  videoUrl,
 ) {
   try {
     const canonicalVideoUrl = YTD_SETTINGS.canonicalYouTubeUrl(videoId);
@@ -1378,7 +1367,7 @@ async function handleSaveNote(
 
     // If no cached transcript, fetch it
     if (!transcript) {
-      const transcriptResult = await handleFetchTranscript(videoId, videoUrl);
+      const transcriptResult = await handleFetchTranscript(videoId);
       if (!transcriptResult.success) {
         return { success: false, error: "Could not fetch transcript" };
       }
@@ -1682,11 +1671,9 @@ async function handleExplainSelection(
 }
 
 // ============================================================
-// TRANSLATION — Translate supported content into Simplified Chinese
+// TRANSLATION — Translate transcript batches into Simplified Chinese
 // ============================================================
 // Uses a low temperature for consistent, natural translations.
-// Different content types get different prompts so the translation
-// matches the format and tone of each section (transcript vs summary etc.)
 
 /**
  * Shared base rules that every translation prompt includes.
@@ -1781,10 +1768,8 @@ function normalizeTranslatedSegmentBatch(parsed, sourceSegments) {
 
 /**
  * Translates content using the configured AI provider.
- * Routes to different prompts based on the content type.
- *
- * @param {string|Object} content - The content to translate (string or JSON object)
- * @param {string} contentType - One of: 'transcript', 'overview', 'explanation'
+ * @param {Object} content - JSON object containing semantic transcript segments
+ * @param {string} contentType - Must be 'transcriptBatch'
  * @param {string} targetLanguage - 'zh' for Simplified Chinese
  * @param {string} videoTitle - The video title (for context)
  * @returns {Object} - { success, translatedContent } or { success: false, error }
@@ -1802,13 +1787,7 @@ async function handleTranslateContent(
         error: `Unsupported translation target: ${String(targetLanguage)}`,
       };
     }
-    const supportedContentTypes = new Set([
-      "transcriptBatch",
-      "transcript",
-      "overview",
-      "explanation",
-    ]);
-    if (!supportedContentTypes.has(contentType)) {
+    if (contentType !== "transcriptBatch") {
       return {
         success: false,
         error: `Unsupported translation content type: ${String(contentType)}`,
@@ -1820,219 +1799,57 @@ async function handleTranslateContent(
       return { success: false, error: "AI provider API key not configured" };
     }
 
-    // Skip if content is empty
-    if (!content || (typeof content === "string" && !content.trim())) {
-      return { success: true, translatedContent: content };
-    }
-
-    const baseRules = await getTranslationBaseRules(targetLanguage);
+    const sourceSegments = validateTranscriptBatchRequest(content);
     const langName = "Simplified Chinese";
+    const baseRules = await getTranslationBaseRules(targetLanguage);
+    const systemPrompt = await loadPromptSection(
+      "translation.md",
+      "Transcript batch translation",
+      {
+        langName,
+        videoTitle: videoTitle || "Unknown",
+        baseRules,
+      },
+    );
+    const userContent = JSON.stringify({ segments: sourceSegments });
+    const translationOptions = {
+      temperature: 0.2,
+      maxTokens: 1536,
+      responseFormat: { type: "json_object" },
+    };
+    let result = await callAiTranslation(
+      systemPrompt,
+      userContent,
+      translationOptions,
+    );
 
-    // Build the system prompt based on content type
-    let systemPrompt = "";
-    let userContent = "";
-
-    switch (contentType) {
-      case "transcriptBatch": {
-        const sourceSegments = validateTranscriptBatchRequest(content);
-        systemPrompt = await loadPromptSection(
-          "translation.md",
-          "Transcript batch translation",
-          {
-            langName,
-            videoTitle: videoTitle || "Unknown",
-            baseRules,
-          },
-        );
-        userContent = JSON.stringify({ segments: sourceSegments });
-        const translationOptions = {
-          temperature: 0.2,
-          maxTokens: 1536,
-          responseFormat: { type: "json_object" },
-        };
-        let result = await callAiTranslation(
-          systemPrompt,
-          userContent,
-          translationOptions,
-        );
-        // DeepSeek JSON mode can rarely return an empty content string. The
-        // prompt already requires JSON, so retry once without response_format.
-        if (
-          !result.success &&
-          result.code === "EMPTY_AI_RESPONSE" &&
-          settings.provider === "deepseek"
-        ) {
-          result = await callAiTranslation(systemPrompt, userContent, {
-            temperature: translationOptions.temperature,
-            maxTokens: translationOptions.maxTokens,
-          });
-        }
-        if (!result.success) return result;
-        const parsed = parseLooseJson(result.text);
-        const aligned = normalizeTranslatedSegmentBatch(parsed, sourceSegments);
-        if (!aligned.segments.some((segment) => segment.text)) {
-          return {
-            success: false,
-            error: "Translation returned no valid Chinese segments",
-          };
-        }
-        return { success: true, translatedContent: aligned };
-      }
-
-      case "transcript":
-        // Transcripts can be long — we handle chunking in the caller (sidepanel.js)
-        // Each chunk arrives here as a string of paragraphs
-        systemPrompt = await loadPromptSection(
-          "translation.md",
-          "Transcript translation",
-          {
-            langName,
-            videoTitle: videoTitle || "Unknown",
-            baseRules,
-          },
-        );
-        userContent = content;
-        break;
-
-      case "overview":
-        // Overview arrives as a JSON object with chapters and keyQuotes
-        systemPrompt = await loadPromptSection(
-          "translation.md",
-          "Overview translation",
-          { langName, baseRules },
-        );
-        userContent = `Video: ${videoTitle || "Unknown"}\n\nJSON TO TRANSLATE:\n${typeof content === "string" ? content : JSON.stringify(content)}`;
-        break;
-
-      case "explanation":
-        // Short explanation text
-        systemPrompt = await loadPromptSection(
-          "translation.md",
-          "Explanation translation",
-          { langName, baseRules },
-        );
-        userContent = content;
-        break;
-
-      default:
-        throw new Error(`Unsupported translation content type: ${contentType}`);
-    }
-
-    // For long transcripts, chunk them (reuse the same chunking logic as enhance)
+    // DeepSeek JSON mode can rarely return an empty content string. The
+    // prompt already requires JSON, so retry once without response_format.
     if (
-      contentType === "transcript" &&
-      typeof content === "string" &&
-      content.length > 12000
+      !result.success &&
+      result.code === "EMPTY_AI_RESPONSE" &&
+      settings.provider === "deepseek"
     ) {
-      return await translateTranscriptInChunks(
-        content,
-        targetLanguage,
-        videoTitle,
-        systemPrompt,
-      );
+      result = await callAiTranslation(systemPrompt, userContent, {
+        temperature: translationOptions.temperature,
+        maxTokens: translationOptions.maxTokens,
+      });
     }
+    if (!result.success) return result;
 
-    // Single API call for everything else
-    const result = await callAiTranslation(systemPrompt, userContent);
-
-    if (!result.success) {
-      return result;
+    const parsed = parseLooseJson(result.text);
+    const aligned = normalizeTranslatedSegmentBatch(parsed, sourceSegments);
+    if (!aligned.segments.some((segment) => segment.text)) {
+      return {
+        success: false,
+        error: "Translation returned no valid Chinese segments",
+      };
     }
-
-    // For JSON content types, validate the response is valid JSON
-    if (contentType === "overview") {
-      let cleaned = result.text.trim();
-      // Strip markdown fences if DeepSeek wrapped them
-      if (cleaned.startsWith("```")) {
-        cleaned = cleaned
-          .replace(/^```(?:json)?\n?/, "")
-          .replace(/\n?```$/, "");
-      }
-      try {
-        const parsed = JSON.parse(cleaned);
-        const normalized = YTD_SETTINGS.normalizeTranslatedOverview(
-          parsed,
-          content,
-        );
-        if (!normalized) {
-          return {
-            success: false,
-            error: "Translation returned an unexpected overview structure",
-          };
-        }
-        return { success: true, translatedContent: normalized };
-      } catch (parseError) {
-        console.error("[YT Digest] Translation JSON parse error:", parseError);
-        // Return raw text as fallback — sidepanel.js will handle gracefully
-        return { success: false, error: "Translation returned invalid JSON" };
-      }
-    }
-
-    return { success: true, translatedContent: result.text.trim() };
+    return { success: true, translatedContent: aligned };
   } catch (error) {
     console.error("[YT Digest] Translation error:", error);
     return { success: false, error: error.message || "Translation failed" };
   }
-}
-
-/**
- * Translates a long transcript by splitting it into chunks.
- * Same approach as enhanceTranscriptInChunks() — split by paragraphs,
- * translate each chunk separately, then combine.
- *
- * @param {string} transcriptText - The full transcript
- * @param {string} targetLanguage - 'zh' or 'ja'
- * @param {string} videoTitle - Video title for context
- * @param {string} systemPrompt - The system prompt to use
- * @returns {Object} - { success, translatedContent }
- */
-async function translateTranscriptInChunks(
-  transcriptText,
-  targetLanguage,
-  videoTitle,
-  systemPrompt,
-) {
-  const CHUNK_SIZE = 12000; // ~12k chars per chunk
-  const chunks = [];
-  let currentChunk = "";
-
-  // Split by paragraph breaks to avoid cutting mid-sentence
-  const paragraphs = transcriptText.split(/\n\n+/);
-
-  for (const para of paragraphs) {
-    if ((currentChunk + para).length > CHUNK_SIZE && currentChunk.length > 0) {
-      chunks.push(currentChunk.trim());
-      currentChunk = para + "\n\n";
-    } else {
-      currentChunk += para + "\n\n";
-    }
-  }
-  if (currentChunk.trim()) {
-    chunks.push(currentChunk.trim());
-  }
-
-  debugLog(`[YT Digest] Translating transcript in ${chunks.length} chunks`);
-
-  const translatedChunks = [];
-  for (let i = 0; i < chunks.length; i++) {
-    debugLog(`[YT Digest] Translating chunk ${i + 1}/${chunks.length}`);
-    const userContent = `Video: ${videoTitle || "Unknown"}\n\nTRANSCRIPT (part ${i + 1} of ${chunks.length}):\n${chunks[i]}`;
-    const result = await callAiTranslation(systemPrompt, userContent);
-
-    if (!result.success) {
-      return {
-        success: false,
-        error: `Chunk ${i + 1} failed: ${result.error}`,
-      };
-    }
-
-    translatedChunks.push(result.text.trim());
-  }
-
-  return {
-    success: true,
-    translatedContent: translatedChunks.join("\n\n"),
-  };
 }
 
 /**

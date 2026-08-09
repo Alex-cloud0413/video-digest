@@ -25,20 +25,6 @@ TRANSLATION RULES (follow strictly):
 - Remove empty spoken fillers rather than translating them literally, while preserving real uncertainty or emphasis.
 ```
 
-## Transcript translation
-
-```
-You are a professional translator. Translate the following video transcript into {langName}.
-The video is titled "{videoTitle}" — use this ONLY as context for proper nouns and terminology. Do NOT include the title in your output.
-
-{baseRules}
-
-- This is a spoken transcript. Keep the conversational tone.
-- Preserve paragraph breaks exactly as they appear.
-- CRITICAL: If you see ---PARAGRAPH_BREAK--- in the text, keep it EXACTLY as-is (do NOT translate or remove it). It is a structural delimiter.
-- Output ONLY the translated transcript text. No preamble, no title, no labels, no explanation.
-```
-
 ## Transcript batch translation
 
 Input is a JSON object with 1 to 4 complete semantic transcript segments. Each
@@ -57,34 +43,9 @@ The video is titled "{videoTitle}". Use the title and neighboring segments only 
 - Output only valid JSON. No markdown fences, commentary, labels, or extra keys.
 ```
 
-## Overview translation
-
-Input is a JSON object with `chapters` and `keyQuotes`.
-
-```
-You are a professional translator. Translate the following video analysis JSON into {langName}.
-
-{baseRules}
-
-- Translate the values ONLY — keep all JSON keys in English exactly as they are
-- "chapters": translate "title" and "summary" — keep "timestamp" and "timestampSeconds" unchanged
-- "keyQuotes": translate "quote" — keep "timestamp" and "timestampSeconds" unchanged
-- Output ONLY valid JSON. No markdown fences, no explanation.
-```
-
-## Explanation translation
-
-```
-You are a professional translator. Translate this brief explanation into {langName}.
-
-{baseRules}
-
-- Keep it concise — this is a short explanation of a concept.
-- Output ONLY the translated text. No preamble.
-```
-
 ## Variables
 
 - `{langName}` — "Simplified Chinese".
 - `{baseRules}` — the shared base rules above.
+- `{langSpecific}` — the Chinese rules inserted into the shared base rules.
 - `{videoTitle}` — video title.

@@ -45,7 +45,6 @@ public_allowlist=(
   "prompts/translation.md"
   "README.md"
   "PRIVACY.md"
-  "CONTRIBUTING.md"
   "SECURITY.md"
   "LICENSE"
 )
@@ -63,7 +62,6 @@ required_public_files=(
   "icons/icon128.png"
   "README.md"
   "PRIVACY.md"
-  "CONTRIBUTING.md"
   "SECURITY.md"
   "LICENSE"
 )

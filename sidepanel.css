@@ -466,42 +466,6 @@ body {
   border-color: #b25742;
 }
 
-/* Cost estimate tooltip on the clean up toggle */
-.cleanup-tooltip {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 100;
-  background: #2e2a24;
-  color: #fff;
-  font-family: var(--font-body);
-  font-weight: 500;
-  font-size: 11px;
-  line-height: 1.45;
-  padding: 8px 12px;
-  border-radius: var(--r-md);
-  box-shadow: 0 6px 18px rgba(50, 42, 32, 0.25);
-  white-space: nowrap;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.18s ease;
-}
-
-.cleanup-tooltip.visible {
-  opacity: 1;
-}
-
-.cleanup-tooltip::before {
-  content: "";
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 5px solid transparent;
-  border-bottom-color: #2e2a24;
-}
-
 .transcript-actions {
   display: flex;
   justify-content: flex-end;
