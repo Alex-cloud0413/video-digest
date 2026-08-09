@@ -40,7 +40,7 @@ function updateProviderFields() {
     aiBaseUrlInput.value = YTD_SETTINGS.DEFAULTS.aiBaseUrl;
     aiModelInput.value = YTD_SETTINGS.DEFAULTS.aiModel;
     providerHelp.innerHTML =
-      'DeepSeek uses <code>https://api.deepseek.com</code> and <code>deepseek-v4-flash</code>.';
+      'DeepSeek uses <code>https://api.deepseek.com</code> and <code>deepseek-v4-flash</code>. <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noreferrer">Create a DeepSeek API key</a>.';
   } else {
     providerHelp.textContent =
       "Enter an OpenAI-compatible base URL and model identifier. HTTPS is required except for localhost.";

@@ -26,6 +26,10 @@ let ytdNoteButton = null;
 let ytdNoteButtonTimer = null;
 let ytdNoteKeyboardListenerAdded = false;
 let ytdNoteButtonRetryTimer = null;
+let ytdDigestButton = null;
+let digestButtonObserver = null;
+let digestButtonReconcileTimer = null;
+let digestButtonResizeListenerAdded = false;
 
 // ============================================================
 // INITIALIZATION
@@ -49,6 +53,7 @@ function init() {
   // Also set up an observer to handle YouTube's dynamic content loading
   // (YouTube is an SPA, so elements appear/disappear as you navigate)
   setupButtonObserver();
+  setupDigestButtonResizeListener();
 }
 
 /**
@@ -174,46 +179,52 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
  *
  * When clicked, it opens the YouTube Digest side panel.
  */
-function injectDigestButton() {
-  // Don't inject if we're not on a video page
-  if (!window.location.pathname.includes("/watch")) return;
+function isVisibleDigestHost(element) {
+  if (!element || !element.isConnected) return false;
 
-  // Don't inject if button already exists
-  if (document.getElementById("ytd-digest-button")) return;
+  const rect = element.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return false;
 
-  // Find YouTube's action buttons container (where Share, Save, etc. live)
-  // IMPORTANT: We must scope this to the PRIMARY video metadata only.
-  // YouTube reuses #top-level-buttons-computed in playlists, comments, etc.
-  // The video's action bar lives inside ytd-watch-metadata or #actions
-  // within the primary column (#primary / #columns #primary).
-  const actionsContainer = document.querySelector(
-    "ytd-watch-metadata #actions #top-level-buttons-computed, " +
-      "ytd-watch-metadata #top-level-buttons-computed, " +
-      "#primary #actions #top-level-buttons-computed, " +
-      "#actions #top-level-buttons-computed, " +
-      "#top-level-buttons-computed",
+  const style = window.getComputedStyle(element);
+  return style.display !== "none" && style.visibility !== "hidden";
+}
+
+/**
+ * YouTube keeps hidden copies of its responsive action toolbar in the DOM.
+ * querySelector() can return one of those 0x0 copies before the toolbar the
+ * viewer can actually see, so inspect every candidate and prefer the visible
+ * #actions-inner that belongs to the current video's metadata.
+ */
+function findDigestButtonHost() {
+  const primaryActionRows = Array.from(
+    document.querySelectorAll("ytd-watch-metadata #actions-inner"),
+  );
+  const visibleActionRow = primaryActionRows.find(isVisibleDigestHost);
+  if (visibleActionRow) return visibleActionRow;
+
+  const fallbackCandidates = Array.from(
+    document.querySelectorAll(
+      "ytd-watch-metadata #actions #top-level-buttons-computed, " +
+        "ytd-watch-metadata #top-level-buttons-computed, " +
+        "#primary #actions #top-level-buttons-computed",
+    ),
   );
 
-  if (!actionsContainer) {
-    // Container not found yet — will retry via observer
-    debugLog("[YouTube Digest Content] Actions container not found yet");
-    return;
-  }
+  return (
+    fallbackCandidates.find(
+      (candidate) =>
+        isVisibleDigestHost(candidate) &&
+        (candidate.closest("ytd-watch-metadata") ||
+          candidate.closest("#primary")),
+    ) || null
+  );
+}
 
-  // Avoid injecting into the wrong container (e.g. playlist/comment menus)
-  const isInPrimary =
-    actionsContainer.closest("#primary") ||
-    actionsContainer.closest("ytd-watch-metadata");
-  if (!isInPrimary) {
-    debugLog("[YouTube Digest Content] Actions container not in primary column");
-    return;
-  }
-
-  debugLog("[YouTube Digest Content] Injecting Digest button");
-
-  // Create our Digest button
+function createDigestButton() {
   const digestButton = document.createElement("button");
   digestButton.id = "ytd-digest-button";
+  digestButton.type = "button";
+  digestButton.setAttribute("aria-label", "Open YouTube Digest");
   digestButton.innerHTML = `
     <span class="ytd-digest-icon" style="font-size: 11px;">▶</span>
     <span class="ytd-digest-label">Digest</span>
@@ -270,9 +281,80 @@ function injectDigestButton() {
     }
   });
 
-  // Insert the button at the end of the actions container
-  actionsContainer.appendChild(digestButton);
-  debugLog("[YouTube Digest Content] Digest button injected");
+  ytdDigestButton = digestButton;
+  return digestButton;
+}
+
+/**
+ * Reconciles the Digest button with YouTube's currently visible action row.
+ * This is intentionally idempotent because YouTube rebuilds its watch page
+ * during navigation and at responsive breakpoints.
+ */
+function injectDigestButton() {
+  const existingButtons = Array.from(
+    document.querySelectorAll("#ytd-digest-button"),
+  );
+
+  if (!window.location.pathname.includes("/watch")) {
+    existingButtons.forEach((button) => button.remove());
+    ytdDigestButton = null;
+    return false;
+  }
+
+  const actionsContainer = findDigestButtonHost();
+  if (!actionsContainer) {
+    debugLog("[YouTube Digest Content] Visible actions container not found yet");
+    return false;
+  }
+
+  let digestButton = existingButtons.find(
+    (button) => button === ytdDigestButton,
+  );
+
+  if (!digestButton) {
+    existingButtons.forEach((button) => button.remove());
+    existingButtons.length = 0;
+    digestButton = createDigestButton();
+  }
+
+  existingButtons.forEach((button) => {
+    if (button !== digestButton) button.remove();
+  });
+
+  if (digestButton.parentElement !== actionsContainer) {
+    // #actions-inner is outside YouTube's horizontally shrinkable native
+    // button list. Keeping Digest as its own sibling prevents it from being
+    // clipped when the watch page gets narrow. The fallback host uses prepend
+    // so Digest receives visibility priority on older YouTube layouts.
+    if (actionsContainer.id === "actions-inner") {
+      actionsContainer.appendChild(digestButton);
+    } else {
+      actionsContainer.insertBefore(digestButton, actionsContainer.firstChild);
+    }
+  }
+
+  debugLog("[YouTube Digest Content] Digest button reconciled");
+  return true;
+}
+
+function scheduleDigestButtonReconciliation(delay = 80) {
+  if (digestButtonReconcileTimer) {
+    clearTimeout(digestButtonReconcileTimer);
+  }
+
+  digestButtonReconcileTimer = setTimeout(() => {
+    digestButtonReconcileTimer = null;
+    injectDigestButton();
+  }, delay);
+}
+
+function setupDigestButtonResizeListener() {
+  if (digestButtonResizeListenerAdded) return;
+
+  window.addEventListener("resize", () => {
+    scheduleDigestButtonReconciliation(120);
+  });
+  digestButtonResizeListenerAdded = true;
 }
 
 /**
@@ -280,12 +362,12 @@ function injectDigestButton() {
  * When the action buttons container appears (after navigation), we inject our button.
  */
 function setupButtonObserver() {
-  const observer = new MutationObserver((mutations) => {
+  if (digestButtonObserver) return;
+
+  digestButtonObserver = new MutationObserver(() => {
     // Check if we need to inject the buttons
     if (window.location.pathname.includes("/watch")) {
-      if (!document.getElementById("ytd-digest-button")) {
-        injectDigestButton();
-      }
+      scheduleDigestButtonReconciliation();
       if (!ytdNoteButton || !ytdNoteButton.isConnected) {
         tryInjectNoteButton();
       }
@@ -293,7 +375,7 @@ function setupButtonObserver() {
   });
 
   // Watch the entire body for changes (YouTube rebuilds large chunks of the DOM)
-  observer.observe(document.body, {
+  digestButtonObserver.observe(document.body, {
     childList: true,
     subtree: true,
   });
@@ -720,8 +802,14 @@ document.addEventListener("yt-navigate-finish", () => {
   existingMarkers.forEach((m) => m.remove());
 
   // Remove old buttons (they will be re-injected for the new video)
-  const existingDigestButton = document.getElementById("ytd-digest-button");
-  if (existingDigestButton) existingDigestButton.remove();
+  document
+    .querySelectorAll("#ytd-digest-button")
+    .forEach((button) => button.remove());
+  ytdDigestButton = null;
+  if (digestButtonReconcileTimer) {
+    clearTimeout(digestButtonReconcileTimer);
+    digestButtonReconcileTimer = null;
+  }
 
   const existingNoteButton = document.getElementById("ytd-note-button");
   if (existingNoteButton) existingNoteButton.remove();
@@ -741,7 +829,7 @@ document.addEventListener("yt-navigate-finish", () => {
 
   // Re-inject buttons for the new video (with a small delay for YouTube to render)
   setTimeout(() => {
-    injectDigestButton();
+    scheduleDigestButtonReconciliation(0);
     tryInjectNoteButton();
   }, 500);
 });

@@ -2,13 +2,13 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-Understand a YouTube video before deciding how much of it to watch. YouTube Digest opens beside YouTube in Chrome and helps you:
+Turn every YouTube video into a resource for deep learning. YouTube Digest brings transcripts, bilingual translation, AI overviews, explanations, and timestamped notes into one Chrome side panel, so you can study ideas and language without losing your place.
 
-- Decide what is worth watching with an AI overview, chapters, and key quotes.
+- Turn captions into a readable, searchable learning resource.
+- Learn languages with the original transcript, a Simplified Chinese translation, or an aligned bilingual view.
+- Build understanding with an AI overview, chapters, key quotes, and selected-text explanations.
 - Navigate long videos by clicking timestamps in the transcript, overview, or notes.
-- Learn with the original transcript, a Simplified Chinese translation, or an aligned bilingual view.
-- Explain selected text and clean up fragmented captions into readable thoughts.
-- Save timestamped notes and return to the relevant moment later.
+- Clean up fragmented captions and save timestamped notes for later study.
 - Keep control of your data with your own API keys, local Chrome storage, and no analytics or telemetry.
 
 YouTube Digest is a bring-your-own-key project installed locally from GitHub. It is not available through the Chrome Web Store, does not include API credits, and does not run a developer-operated server.
@@ -22,7 +22,7 @@ You do not need to understand the code or use the command line. Send this messag
 Your agent should:
 
 1. Download or clone the repository to a folder you plan to keep.
-2. Help you create your own Supadata and AI provider accounts.
+2. Open the official Supadata and DeepSeek pages below and help you create your own accounts.
 3. Walk you through loading the folder in Chrome with **Load unpacked**.
 4. Show you where to enter your API keys in the extension's **Settings** page.
 5. Open a YouTube video with captions and confirm the transcript and translation work.
@@ -51,7 +51,28 @@ YouTube Digest needs two keys under your own provider accounts:
 1. A **Supadata API key** to retrieve YouTube transcripts.
 2. An **AI provider API key** for overviews, cleanup, explanations, and translation.
 
-Open **Settings** from the side panel. You can also open the YouTube Digest **Options** page from its card at `chrome://extensions` or by right-clicking its toolbar icon.
+### Get a Supadata API key
+
+1. Open the official [Supadata sign-up page](https://dash.supadata.ai/auth/sign-up).
+2. Create an account and complete the short onboarding flow.
+3. Supadata generates an API key automatically during onboarding.
+4. Open the [Supadata dashboard](https://dash.supadata.ai/) whenever you need to find or manage the key.
+5. Copy the key and paste it into **Supadata API key** in YouTube Digest Settings.
+
+See the [official Supadata documentation](https://docs.supadata.ai/) if the dashboard flow changes.
+
+### Get a DeepSeek API key
+
+1. Open the official [DeepSeek API Keys page](https://platform.deepseek.com/api_keys).
+2. Sign in or create a DeepSeek Platform account when prompted.
+3. Choose **Create new API key**, give it a recognizable name such as `YouTube Digest`, and create it.
+4. Copy the key immediately. The full key may only be shown once.
+5. Paste it into **AI API key** in YouTube Digest Settings.
+6. If DeepSeek reports insufficient balance, add credit in your DeepSeek Platform account and try again.
+
+See the [official DeepSeek API documentation](https://api-docs.deepseek.com/) for current account and API details.
+
+Open **Settings** from the side panel. You can also open the YouTube Digest **Options** page from its card at `chrome://extensions` or by right-clicking its toolbar icon. Paste keys only into these Settings fields. Never paste a key into an AI chat, repository file, screenshot, or public message.
 
 The default AI provider is DeepSeek:
 
@@ -128,6 +149,14 @@ YouTube Digest makes provider requests directly from the extension:
 There is no YouTube Digest account system, advertising, analytics, or telemetry. Supadata and the AI provider still receive data under their own terms and privacy policies. See [PRIVACY.md](PRIVACY.md) for details.
 
 ## Troubleshooting
+
+### The Digest button is missing on a YouTube video
+
+- At `chrome://extensions`, find YouTube Digest and click **Reload**, then refresh the YouTube tab.
+- Confirm that you are on a standard `https://www.youtube.com/watch?...` page, not a Short, embed, or live page.
+- The current version automatically follows YouTube when its responsive action bar changes. Wait a moment after the page finishes loading.
+- If you have an older downloaded copy, resizing the YouTube window horizontally once may reveal the button. Then download the latest version so resizing is no longer required.
+- If it is still missing, ask your coding agent to inspect the content script on that exact video page.
 
 ### The side panel does not open
 

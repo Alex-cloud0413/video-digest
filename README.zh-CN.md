@@ -2,13 +2,13 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-在决定要不要完整观看一个 YouTube 视频之前，先快速了解它。YouTube Digest 会显示在 Chrome 的 YouTube 侧边栏中，可以帮助你：
+把每个 YouTube 视频变成一份可以深入学习的资料。YouTube Digest 把字幕、双语翻译、AI 概览、内容讲解和时间戳笔记放进同一个 Chrome 侧边栏，让你可以持续学习视频中的知识和语言，同时不丢失原视频上下文。
 
-- 通过 AI 概览、章节和重点引用判断视频是否值得看。
+- 把零碎字幕变成清晰、可搜索的学习资料。
+- 查看原文、简体中文翻译，或中英双语对照字幕来学习语言。
+- 通过 AI 概览、章节、重点引用和选中文本讲解建立系统理解。
 - 点击字幕、概览或笔记中的时间戳，快速跳转到对应位置。
-- 查看原文、简体中文翻译，或中英双语对照字幕。
-- 选中字幕内容进行讲解，并把零碎字幕整理成更容易阅读的句子。
-- 保存带时间戳的笔记，之后可以回到视频中的对应位置。
+- 整理零碎字幕并保存带时间戳的笔记，方便之后复习。
 - 使用自己的 API Key，数据保存在本地 Chrome 中，不包含分析统计或行为追踪。
 
 YouTube Digest 是一个需要自行提供 API Key 的开源项目，通过 GitHub 安装。目前没有上架 Chrome 应用商店，不赠送 API 额度，也没有开发者运营的服务器。
@@ -22,7 +22,7 @@ YouTube Digest 是一个需要自行提供 API Key 的开源项目，通过 GitH
 你的 Agent 应该帮你：
 
 1. 下载或克隆项目，并保存到一个不会随意删除的文件夹。
-2. 指导你创建自己的 Supadata 和 AI 服务账号。
+2. 打开下方 Supadata 和 DeepSeek 官方页面，指导你创建自己的账号。
 3. 指导你在 Chrome 中通过“加载已解压的扩展程序”安装项目。
 4. 告诉你应该在扩展的“设置”页面哪个位置填写 API Key。
 5. 打开一个带字幕的 YouTube 视频，确认字幕和翻译功能可以使用。
@@ -51,7 +51,28 @@ YouTube Digest 需要你在自己的服务账号中准备两个 Key：
 1. **Supadata API Key**，用于获取 YouTube 字幕。
 2. **AI 服务 API Key**，用于生成概览、整理字幕、讲解内容和翻译。
 
-在侧边栏中打开 **Settings**。你也可以在 `chrome://extensions` 的 YouTube Digest 卡片中打开扩展选项。
+### 获取 Supadata API Key
+
+1. 打开 Supadata 官方[注册页面](https://dash.supadata.ai/auth/sign-up)。
+2. 创建账号并完成简短的新手引导。
+3. Supadata 会在新手引导过程中自动生成 API Key。
+4. 之后可以随时打开 [Supadata 控制台](https://dash.supadata.ai/)查找或管理 Key。
+5. 复制 Key，并粘贴到 YouTube Digest 设置中的 **Supadata API key**。
+
+如果页面流程发生变化，请查看 [Supadata 官方文档](https://docs.supadata.ai/)。
+
+### 获取 DeepSeek API Key
+
+1. 打开 DeepSeek 官方 [API Keys 页面](https://platform.deepseek.com/api_keys)。
+2. 按照提示登录，或创建 DeepSeek 开放平台账号。
+3. 点击 **Create new API key**，填写容易识别的名称，例如 `YouTube Digest`，然后创建 Key。
+4. 立即复制 Key。完整 Key 可能只会显示一次。
+5. 把 Key 粘贴到 YouTube Digest 设置中的 **AI API key**。
+6. 如果 DeepSeek 提示余额不足，请在 DeepSeek 开放平台账号中充值后再试。
+
+当前账号和接口说明请查看 [DeepSeek 官方 API 文档](https://api-docs.deepseek.com/)。
+
+在侧边栏中打开 **Settings**。你也可以在 `chrome://extensions` 的 YouTube Digest 卡片中打开扩展选项。Key 只能粘贴到这些设置输入框中。不要把 Key 发送到 AI 对话、项目文件、截图或公开消息中。
 
 默认 AI 服务是 DeepSeek：
 
@@ -128,6 +149,14 @@ YouTube Digest 会直接从扩展向服务商发送请求：
 YouTube Digest 没有账号系统、广告、分析统计或行为追踪。Supadata 和 AI 服务仍会按照各自的条款和隐私政策处理数据。详情请查看 [PRIVACY.md](PRIVACY.md)。
 
 ## 常见问题
+
+### YouTube 视频页面没有显示 Digest 按钮
+
+- 在 `chrome://extensions` 中找到 YouTube Digest，点击“重新加载”，然后刷新 YouTube 页面。
+- 确认当前页面是标准 `https://www.youtube.com/watch?...` 页面，而不是 Shorts、嵌入页面或直播页面。
+- 当前版本会在 YouTube 响应式操作栏变化时自动重新定位按钮。页面加载完成后可以稍等片刻。
+- 如果你使用的是较早下载的版本，可以先横向调整一次 YouTube 窗口宽度让按钮出现，然后下载最新版，这样之后不再需要调整窗口。
+- 如果按钮仍然没有出现，让你的编程 Agent 在这个具体视频页面检查 content script。
 
 ### 侧边栏无法打开
 
