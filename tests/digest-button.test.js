@@ -43,6 +43,22 @@ class FakeElement {
     return null;
   }
 
+  querySelectorAll(selector) {
+    const matches = [];
+
+    for (const child of this.children) {
+      if (
+        selector === "#top-level-buttons-computed" &&
+        child.id === selector.slice(1)
+      ) {
+        matches.push(child);
+      }
+      matches.push(...child.querySelectorAll(selector));
+    }
+
+    return matches;
+  }
+
   addEventListener(type, listener) {
     this.listeners[type] = listener;
   }
@@ -181,45 +197,58 @@ function createHarness() {
   };
 }
 
+function createActionRow({ width, height }) {
+  const row = new FakeElement({
+    id: "actions-inner",
+    width,
+    height,
+    inMetadata: true,
+    inPrimary: true,
+  });
+  const buttonGroup = new FakeElement({
+    id: "top-level-buttons-computed",
+    width,
+    height,
+    inMetadata: true,
+    inPrimary: true,
+  });
+  row.appendChild(buttonGroup);
+  return { row, buttonGroup };
+}
+
 test("Digest button skips a hidden responsive toolbar", () => {
   const harness = createHarness();
-  const hiddenRow = new FakeElement({
-    id: "actions-inner",
+  const { row: hiddenRow, buttonGroup: hiddenGroup } = createActionRow({
     width: 0,
     height: 0,
-    inMetadata: true,
-    inPrimary: true,
   });
-  const visibleRow = new FakeElement({
-    id: "actions-inner",
+  const { row: visibleRow, buttonGroup: visibleGroup } = createActionRow({
     width: 389,
     height: 36,
-    inMetadata: true,
-    inPrimary: true,
   });
+  const nativeButton = new FakeElement();
+  visibleGroup.appendChild(nativeButton);
   harness.actionRows.push(hiddenRow, visibleRow);
 
-  assert.equal(harness.context.findDigestButtonHost(), visibleRow);
+  assert.equal(harness.context.findDigestButtonHost(), visibleGroup);
   assert.equal(harness.context.injectDigestButton(), true);
-  assert.equal(hiddenRow.children.length, 0);
-  assert.equal(visibleRow.children[0].id, "ytd-digest-button");
+  assert.equal(hiddenGroup.children.length, 0);
+  assert.equal(visibleRow.children.length, 1);
+  assert.equal(visibleGroup.children[0].id, "ytd-digest-button");
+  assert.equal(visibleGroup.children[1], nativeButton);
+  assert.match(visibleGroup.children[0].style.cssText, /flex:\s*0 0 auto/);
+  assert.match(visibleGroup.children[0].style.cssText, /width:\s*max-content/);
 });
 
 test("Digest button replaces stale instances and removes duplicates", () => {
   const harness = createHarness();
-  const staleRow = new FakeElement({
-    id: "actions-inner",
+  const { row: staleRow, buttonGroup: staleGroup } = createActionRow({
     width: 0,
     height: 0,
-    inMetadata: true,
-    inPrimary: true,
   });
-  const visibleRow = new FakeElement({
-    id: "actions-inner",
+  const { row: visibleRow, buttonGroup: visibleGroup } = createActionRow({
     width: 500,
     height: 36,
-    inMetadata: true,
-    inPrimary: true,
   });
   harness.actionRows.push(staleRow, visibleRow);
 
@@ -228,33 +257,28 @@ test("Digest button replaces stale instances and removes duplicates", () => {
   const duplicateButton = new FakeElement();
   duplicateButton.id = "ytd-digest-button";
   harness.elements.push(staleButton, duplicateButton);
-  staleRow.appendChild(staleButton);
-  staleRow.appendChild(duplicateButton);
+  staleGroup.appendChild(staleButton);
+  staleGroup.appendChild(duplicateButton);
 
   assert.equal(harness.context.injectDigestButton(), true);
-  assert.equal(staleRow.children.length, 0);
+  assert.equal(staleGroup.children.length, 0);
   assert.equal(visibleRow.children.length, 1);
-  assert.notEqual(visibleRow.children[0], staleButton);
-  assert.equal(visibleRow.children[0].id, "ytd-digest-button");
+  assert.equal(visibleGroup.children.length, 1);
+  assert.notEqual(visibleGroup.children[0], staleButton);
+  assert.equal(visibleGroup.children[0].id, "ytd-digest-button");
   assert.equal(staleButton.isConnected, false);
   assert.equal(duplicateButton.isConnected, false);
 });
 
 test("resize reconciliation follows YouTube to the newly visible toolbar", () => {
   const harness = createHarness();
-  const firstRow = new FakeElement({
-    id: "actions-inner",
+  const { row: firstRow, buttonGroup: firstGroup } = createActionRow({
     width: 500,
     height: 36,
-    inMetadata: true,
-    inPrimary: true,
   });
-  const secondRow = new FakeElement({
-    id: "actions-inner",
+  const { row: secondRow, buttonGroup: secondGroup } = createActionRow({
     width: 0,
     height: 0,
-    inMetadata: true,
-    inPrimary: true,
   });
   harness.actionRows.push(firstRow, secondRow);
 
@@ -262,32 +286,31 @@ test("resize reconciliation follows YouTube to the newly visible toolbar", () =>
   harness.context.setupDigestButtonResizeListener();
   firstRow.width = 0;
   firstRow.height = 0;
+  firstGroup.width = 0;
+  firstGroup.height = 0;
   secondRow.width = 389;
   secondRow.height = 36;
+  secondGroup.width = 389;
+  secondGroup.height = 36;
 
   harness.windowListeners.resize();
   harness.flushTimers();
 
-  assert.equal(firstRow.children.length, 0);
+  assert.equal(firstGroup.children.length, 0);
   assert.equal(secondRow.children.length, 1);
-  assert.equal(secondRow.children[0].id, "ytd-digest-button");
+  assert.equal(secondGroup.children.length, 1);
+  assert.equal(secondGroup.children[0].id, "ytd-digest-button");
 });
 
 test("DOM mutation reconciliation repairs a replaced toolbar", () => {
   const harness = createHarness();
-  const oldRow = new FakeElement({
-    id: "actions-inner",
+  const { row: oldRow, buttonGroup: oldGroup } = createActionRow({
     width: 500,
     height: 36,
-    inMetadata: true,
-    inPrimary: true,
   });
-  const newRow = new FakeElement({
-    id: "actions-inner",
+  const { row: newRow, buttonGroup: newGroup } = createActionRow({
     width: 0,
     height: 0,
-    inMetadata: true,
-    inPrimary: true,
   });
   harness.actionRows.push(oldRow, newRow);
 
@@ -295,12 +318,17 @@ test("DOM mutation reconciliation repairs a replaced toolbar", () => {
   harness.context.setupButtonObserver();
   oldRow.width = 0;
   oldRow.height = 0;
+  oldGroup.width = 0;
+  oldGroup.height = 0;
   newRow.width = 500;
   newRow.height = 36;
+  newGroup.width = 500;
+  newGroup.height = 36;
 
   harness.observers[0].callback([]);
   harness.flushTimers();
 
-  assert.equal(oldRow.children.length, 0);
+  assert.equal(oldGroup.children.length, 0);
   assert.equal(newRow.children.length, 1);
+  assert.equal(newGroup.children.length, 1);
 });
