@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>YT Digest Settings</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main class="settings-shell">
+      <header>
+        <div class="eyebrow">YT Digest</div>
+        <h1>Bring your own API keys</h1>
+        <p class="lede">
+          Keys stay in this Chrome profile and are sent only to the providers
+          you configure. This open-source extension has no developer server or
+          analytics.
+        </p>
+      </header>
+
+      <form id="settingsForm">
+        <section class="card">
+          <h2>Transcript provider</h2>
+          <label for="supadataApiKey">Supadata API key</label>
+          <input
+            id="supadataApiKey"
+            name="supadataApiKey"
+            type="password"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Paste your Supadata key"
+          />
+          <p class="help">
+            Used to fetch timestamped YouTube subtitles.
+            <a href="https://supadata.ai/" target="_blank" rel="noreferrer"
+              >Get a Supadata key</a
+            >.
+          </p>
+        </section>
+
+        <section class="card">
+          <h2>AI provider</h2>
+          <label for="provider">Provider</label>
+          <select id="provider" name="provider">
+            <option value="deepseek">DeepSeek V4 Flash</option>
+            <option value="custom">Custom OpenAI-compatible provider</option>
+          </select>
+
+          <div class="field-grid">
+            <div>
+              <label for="aiBaseUrl">Base URL</label>
+              <input
+                id="aiBaseUrl"
+                name="aiBaseUrl"
+                type="url"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </div>
+            <div>
+              <label for="aiModel">Model</label>
+              <input
+                id="aiModel"
+                name="aiModel"
+                type="text"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </div>
+          </div>
+
+          <label for="aiApiKey">AI API key</label>
+          <input
+            id="aiApiKey"
+            name="aiApiKey"
+            type="password"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Paste your AI provider key"
+          />
+          <p class="help" id="providerHelp">
+            DeepSeek uses <code>https://api.deepseek.com</code> and
+            <code>deepseek-v4-flash</code>.
+          </p>
+          <div class="privacy-note">
+            When you use AI features, the selected provider receives the video
+            transcript and relevant video context. Review that provider’s terms
+            and pricing before saving.
+          </div>
+        </section>
+
+        <div class="form-actions">
+          <button class="primary" type="submit">Save settings</button>
+          <span id="saveStatus" role="status" aria-live="polite"></span>
+        </div>
+      </form>
+
+      <section class="card data-card">
+        <h2>Local data</h2>
+        <p class="help">
+          Digests, translations, and notes are stored only in this Chrome
+          profile. You can remove them at any time.
+        </p>
+        <div class="data-actions">
+          <button id="clearCacheBtn" type="button">Clear cached digests</button>
+          <button id="clearNotesBtn" type="button">Delete all notes</button>
+          <button id="resetBtn" class="danger" type="button">
+            Reset extension data
+          </button>
+        </div>
+        <span id="dataStatus" role="status" aria-live="polite"></span>
+      </section>
+
+      <footer>
+        Read <a href="PRIVACY.md" target="_blank">PRIVACY.md</a> in the
+        repository for the complete data-flow description.
+      </footer>
+    </main>
+
+    <script src="settings.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>

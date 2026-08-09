@@ -2,26 +2,18 @@
   "manifest_version": 3,
   "name": "YT Digest",
   "version": "1.1.0",
-  "description": "AI-powered YouTube video digests — know what's worth watching before you watch it.",
-  "permissions": [
-    "sidePanel",
-    "activeTab",
-    "storage",
-    "tabs",
-    "scripting"
-  ],
+  "minimum_chrome_version": "116",
+  "description": "Read and translate YouTube videos with timestamped transcripts, AI overviews, and notes.",
+  "permissions": ["sidePanel", "storage", "tabs", "scripting"],
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://api.supadata.ai/*",
-    "https://api.anthropic.com/*",
-    "https://api.assemblyai.com/*",
-    "https://api.deepseek.com/*",
-    "https://api.qwkuns.me/*",
-    "https://api.dl.woof.monster/*",
-    "https://api.cobalt.liubquanti.click/*",
-    "https://api.kektube.com/*",
-    "https://cobaltapi.cjs.nz/*",
-    "https://*.googlevideo.com/*"
+    "https://api.deepseek.com/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
   ],
   "action": {
     "default_title": "Open YT Digest",
@@ -36,6 +28,10 @@
   },
   "background": {
     "service_worker": "background.js"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
   },
   "content_scripts": [
     {

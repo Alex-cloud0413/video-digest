@@ -16,6 +16,10 @@ skills/
 skills-lock.json
 .playwright-mcp/
 node_modules/
+dist/
 
 # Environment
 .env
+.env.*
+*.pem
+*.key
