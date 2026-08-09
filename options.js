@@ -104,7 +104,7 @@ async function saveSettings(event) {
       }
     }
 
-    saveStatus.textContent = "Saved. Reopen YT Digest to use these settings.";
+    saveStatus.textContent = "Saved. Reopen YouTube Digest to use these settings.";
   } catch (error) {
     saveStatus.textContent = error.message;
   }
@@ -137,5 +137,5 @@ async function resetAllData() {
     });
   }
   await loadSettings();
-  dataStatus.textContent = "All YT Digest data was deleted.";
+  dataStatus.textContent = "All YouTube Digest data was deleted.";
 }
