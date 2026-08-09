@@ -1,7 +1,7 @@
 /**
  * SIDE PANEL LOGIC
  *
- * Handles the UI for YT Digest: video detection, transcript analysis,
+ * Handles the UI for YouTube Digest: video detection, transcript analysis,
  * rendering results, and export features.
  */
 
@@ -450,7 +450,7 @@ async function checkCurrentTab() {
       if (tabs[0]) tab = tabs[0];
     }
 
-    debugLog("[YT Digest Panel] Found tab:", tab?.id, tab?.url);
+    debugLog("[YouTube Digest Panel] Found tab:", tab?.id, tab?.url);
 
     if (!tab?.url) {
       showState("welcome");
@@ -471,7 +471,7 @@ async function checkCurrentTab() {
           action: "relayToContent",
           payload: { action: "getVideoInfo" },
         });
-        debugLog("[YT Digest Panel] getVideoInfo result:", result);
+        debugLog("[YouTube Digest Panel] getVideoInfo result:", result);
         if (result.success && result.response) {
           currentVideoTitle = result.response.title || "";
           currentChannelName = result.response.channelName || "";
@@ -479,7 +479,7 @@ async function checkCurrentTab() {
           currentVideoDuration = result.response.duration || 0;
         }
       } catch (e) {
-        console.error("[YT Digest Panel] getVideoInfo error:", e);
+        console.error("[YouTube Digest Panel] getVideoInfo error:", e);
         currentVideoTitle = "";
         currentChannelName = "";
         currentVideoDescription = "";
@@ -625,7 +625,7 @@ async function startDigest(videoId, videoUrl) {
     if (transcriptResult.error === "NO_SUPADATA_KEY") {
       showError(
         "API key missing",
-        "Add your Supadata API key in YT Digest Settings.",
+        "Add your Supadata API key in YouTube Digest Settings.",
       );
       return;
     }
@@ -685,7 +685,7 @@ function renderAnalysisResults(analysis) {
     `;
     li.addEventListener("click", () => {
       debugLog(
-        "[YT Digest Panel] Chapter clicked:",
+        "[YouTube Digest Panel] Chapter clicked:",
         chapter.timestamp,
         chapter.timestampSeconds,
       );
@@ -716,7 +716,7 @@ function renderAnalysisResults(analysis) {
     `;
     div.addEventListener("click", () => {
       debugLog(
-        "[YT Digest Panel] Quote clicked:",
+        "[YouTube Digest Panel] Quote clicked:",
         quote.timestamp,
         quote.timestampSeconds,
       );
@@ -775,7 +775,7 @@ async function saveQuoteAsNote(quote, btn) {
       // Refresh notes list if on Notes tab
       loadNotes(currentVideoId);
     } else {
-      console.error("[YT Digest] Save quote as note failed:", result.error);
+      console.error("[YouTube Digest] Save quote as note failed:", result.error);
       btn.textContent = "Error";
       setTimeout(() => {
         btn.textContent = originalText;
@@ -783,7 +783,7 @@ async function saveQuoteAsNote(quote, btn) {
       }, 1500);
     }
   } catch (error) {
-    console.error("[YT Digest] Save quote as note error:", error);
+    console.error("[YouTube Digest] Save quote as note error:", error);
     btn.textContent = "Error";
     setTimeout(() => {
       btn.textContent = originalText;
@@ -1024,7 +1024,7 @@ function exportTranscript() {
 
   exportText += `TRANSCRIPT:\n\n${transcriptContent}\n`;
   exportText += `\n${"—".repeat(60)}\n`;
-  exportText += `Exported by YT Digest\n`;
+  exportText += `Exported by YouTube Digest\n`;
 
   const filename = `${sanitizeFilename(currentVideoTitle)}-transcript.txt`;
   downloadTextFile(exportText, filename);
@@ -1095,7 +1095,7 @@ function showConfigError(configStatus) {
   showState("error");
   document.getElementById("errorTitle").textContent = "API Keys Missing";
   document.getElementById("errorMessage").textContent =
-    `Add your ${missingKeys.join(" and ")} API key${missingKeys.length === 1 ? "" : "s"} in YT Digest Settings.`;
+    `Add your ${missingKeys.join(" and ")} API key${missingKeys.length === 1 ? "" : "s"} in YouTube Digest Settings.`;
   document.getElementById("errorBtn").textContent = "Open Settings";
   errorAction = () => chrome.runtime.sendMessage({ action: "openOptions" });
 }
@@ -1171,7 +1171,7 @@ async function triggerAnalysis() {
     // Save to cache now that we have analysis
     await saveToCache(currentVideoId);
   } catch (error) {
-    console.error("[YT Digest Panel] Analysis error:", error);
+    console.error("[YouTube Digest Panel] Analysis error:", error);
     if (chapterList)
       chapterList.innerHTML = `<li class="chapter-item" style="color: var(--accent); border: none;">Error: ${escapeHtml(error.message)}</li>`;
   }
@@ -1184,9 +1184,9 @@ async function triggerAnalysis() {
 // ============================================================
 
 async function seekTo(seconds) {
-  debugLog("[YT Digest Panel] seekTo called with:", seconds);
+  debugLog("[YouTube Digest Panel] seekTo called with:", seconds);
   if (seconds === undefined || seconds === null) {
-    debugLog("[YT Digest Panel] seekTo aborted - no seconds value");
+    debugLog("[YouTube Digest Panel] seekTo aborted - no seconds value");
     return;
   }
 
@@ -1200,11 +1200,11 @@ async function seekTo(seconds) {
     if (youtubeTabId) {
       try {
         await chrome.tabs.sendMessage(youtubeTabId, payload);
-        debugLog("[YT Digest Panel] seekTo direct success");
+        debugLog("[YouTube Digest Panel] seekTo direct success");
         return;
       } catch (directErr) {
         debugLog(
-          "[YT Digest Panel] Direct seekTo failed, falling back to relay:",
+          "[YouTube Digest Panel] Direct seekTo failed, falling back to relay:",
           directErr.message,
         );
       }
@@ -1215,9 +1215,9 @@ async function seekTo(seconds) {
       action: "relayToContent",
       payload,
     });
-    debugLog("[YT Digest Panel] seekTo relay result:", result);
+    debugLog("[YouTube Digest Panel] seekTo relay result:", result);
   } catch (error) {
-    console.error("[YT Digest Panel] seekTo error:", error);
+    console.error("[YouTube Digest Panel] seekTo error:", error);
   }
 }
 
@@ -1560,7 +1560,7 @@ async function evictOldCacheEntries(maxEntries) {
       .map((e) => e.key);
     if (toRemove.length > 0) {
       await chrome.storage.local.remove(toRemove);
-      debugLog(`[YT Digest] Evicted ${toRemove.length} old cache entries`);
+      debugLog(`[YouTube Digest] Evicted ${toRemove.length} old cache entries`);
     }
   } catch (error) {
     console.error("Cache eviction error:", error);
@@ -1622,7 +1622,7 @@ async function loadNotes(videoId) {
       renderNotes(result.notes, videoId);
     }
   } catch (error) {
-    console.error("[YT Digest Panel] Load notes error:", error);
+    console.error("[YouTube Digest Panel] Load notes error:", error);
   }
 }
 
@@ -1729,7 +1729,7 @@ async function deleteNote(noteId) {
       noteId: noteId,
     });
   } catch (error) {
-    console.error("[YT Digest Panel] Delete note error:", error);
+    console.error("[YouTube Digest Panel] Delete note error:", error);
   }
 }
 

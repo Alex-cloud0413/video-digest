@@ -21,12 +21,34 @@ test("manifest uses minimized install-time permissions", () => {
 
 test("release copy documents current scope without em dashes", () => {
   const readme = read("README.md");
+  const chineseReadme = read("README.zh-CN.md");
   const manifest = JSON.parse(read("manifest.json"));
   const packageJson = JSON.parse(read("package.json"));
 
   assert.doesNotMatch(readme, /—/);
+  assert.doesNotMatch(chineseReadme, /—/);
   assert.doesNotMatch(manifest.description, /—/);
   assert.doesNotMatch(packageJson.description, /—/);
+
+  assert.equal(manifest.name, "YouTube Digest");
+  assert.equal(packageJson.name, "youtube-digest");
+  assert.match(read("scripts/package-extension.sh"), /youtube-digest-v\$version\.zip/);
+  assert.doesNotMatch(
+    [readme, chineseReadme, read("PRIVACY.md"), read("SECURITY.md")].join("\n"),
+    /\bYT Digest\b/,
+  );
+  assert.match(readme, /^# YouTube Digest$/m);
+  assert.match(readme, /^## Install with your coding agent$/m);
+  assert.match(
+    readme,
+    /Download this for me and walk me through step by step how to install it and set it up\. Use simple terms\. https:\/\/github\.com\/zarazhangrui\/youtube-digest/,
+  );
+  assert.match(readme, /upstream issues and pull requests are not accepted/i);
+  assert.doesNotMatch(readme, /^## Contributing$/m);
+  assert.match(chineseReadme, /^# YouTube Digest$/m);
+  assert.match(chineseReadme, /^## 让你的编程 Agent 帮你安装$/m);
+  assert.match(chineseReadme, /不接受上游 Issue 或 Pull Request/);
+  assert.match(chineseReadme, /增加更多翻译语言/);
 
   assert.match(readme, /100 credits per month/i);
   assert.match(readme, /native transcript request uses \*\*1 credit\*\*/i);
@@ -37,9 +59,9 @@ test("release copy documents current scope without em dashes", () => {
   assert.match(readme, /supadata\.ai\/pricing/i);
   assert.match(readme, /docs\.supadata\.ai\/get-transcript/i);
 
-  assert.match(readme, /^## Remix it: DIY and vibe coding ideas$/m);
+  assert.match(readme, /^## Remix it with your coding agent$/m);
   assert.match(readme, /more translation languages/i);
-  assert.match(readme, /customizable summary templates/i);
+  assert.match(readme, /customized summary templates/i);
   assert.match(readme, /vocabulary notebook/i);
 });
 
