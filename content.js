@@ -511,7 +511,6 @@ async function saveCurrentNote() {
       timestamp: currentTime,
       videoTitle: videoInfo.title,
       channelName: videoInfo.channelName,
-      videoUrl: window.location.href,
     });
 
     if (result.success) {

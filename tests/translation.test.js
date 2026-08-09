@@ -51,7 +51,7 @@ function loadSidepanelHelpers({
       windows: { getCurrent: () => Promise.resolve({ id: 1 }) },
       tabs: { onUpdated: listeners, onActivated: listeners },
     },
-    YTD_SETTINGS: { normalizeTranslatedOverview: () => null },
+    YTD_SETTINGS: {},
   };
   sandbox.globalThis = sandbox;
   vm.runInNewContext(read("sidepanel.js"), sandbox);
@@ -104,7 +104,6 @@ function loadBackgroundHelpers({
       STORAGE_KEY: "ytd_settings",
       normalize: (value) => value,
       chatCompletionsUrl: (baseUrl) => `${baseUrl}/chat/completions`,
-      normalizeTranslatedOverview: () => null,
     },
   };
   sandbox.globalThis = sandbox;

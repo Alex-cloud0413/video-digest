@@ -72,87 +72,6 @@ var YTD_SETTINGS = (() => {
     return `https://www.youtube.com/watch?v=${normalized}`;
   }
 
-  function normalizeTranslatedOverview(translated, source) {
-    const sourceChapters = Array.isArray(source?.chapters)
-      ? source.chapters
-      : null;
-    const sourceQuotes = Array.isArray(source?.keyQuotes)
-      ? source.keyQuotes
-      : null;
-    if (
-      !translated ||
-      typeof translated !== "object" ||
-      !sourceChapters ||
-      !sourceQuotes ||
-      !Array.isArray(translated.chapters) ||
-      !Array.isArray(translated.keyQuotes) ||
-      translated.chapters.length !== sourceChapters.length ||
-      translated.keyQuotes.length !== sourceQuotes.length
-    ) {
-      return null;
-    }
-
-    const safeString = (value, fallback, maxLength) => {
-      const candidate =
-        typeof value === "string" && value.trim()
-          ? value.trim()
-          : typeof fallback === "string"
-            ? fallback.trim()
-            : "";
-      return candidate.slice(0, maxLength);
-    };
-    const safeSeconds = (value) => {
-      const seconds = Number(value);
-      return Number.isFinite(seconds) && seconds >= 0
-        ? Math.floor(seconds)
-        : null;
-    };
-
-    const chapters = sourceChapters.map((original, index) => {
-      const candidate = translated.chapters[index];
-      const timestampSeconds = safeSeconds(original?.timestampSeconds);
-      const timestamp = safeString(original?.timestamp, "", 32);
-      const title = safeString(candidate?.title, original?.title, 300);
-      if (
-        !candidate ||
-        typeof candidate !== "object" ||
-        timestampSeconds === null ||
-        !timestamp ||
-        !title
-      ) {
-        return null;
-      }
-      return {
-        title,
-        summary: safeString(candidate.summary, original?.summary, 1500),
-        timestamp,
-        timestampSeconds,
-      };
-    });
-
-    const keyQuotes = sourceQuotes.map((original, index) => {
-      const candidate = translated.keyQuotes[index];
-      const timestampSeconds = safeSeconds(original?.timestampSeconds);
-      const timestamp = safeString(original?.timestamp, "", 32);
-      const quote = safeString(candidate?.quote, original?.quote, 3000);
-      if (
-        !candidate ||
-        typeof candidate !== "object" ||
-        timestampSeconds === null ||
-        !timestamp ||
-        !quote
-      ) {
-        return null;
-      }
-      return { quote, timestamp, timestampSeconds };
-    });
-
-    if (chapters.some((item) => !item) || keyQuotes.some((item) => !item)) {
-      return null;
-    }
-    return { chapters, keyQuotes };
-  }
-
   return {
     STORAGE_KEY,
     DEFAULTS,
@@ -160,7 +79,6 @@ var YTD_SETTINGS = (() => {
     chatCompletionsUrl,
     permissionPattern,
     canonicalYouTubeUrl,
-    normalizeTranslatedOverview,
   };
 })();
 

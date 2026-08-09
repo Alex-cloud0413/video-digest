@@ -20,9 +20,7 @@ let currentAnalysis = null;
 let currentTranscript = null;
 let currentTranscriptText = null; // Plain text (for display/export)
 let currentTranscriptTimestamped = null; // With timestamps for AI analysis
-let currentTranscriptSource = null; // always null now (subtitles are the only source)
 let currentTranscriptLanguage = null;
-let currentAvailableTranscriptLanguages = [];
 let currentEnhancedTranscript = null;
 let currentVideoTitle = "";
 let currentChannelName = "";
@@ -37,14 +35,8 @@ let errorAction = null;
 // The public transcript control intentionally supports only the original
 // subtitles, Chinese, and an aligned source + Chinese view.
 let currentTranscriptMode = "original";
-let currentLanguage = "en"; // Retained for the internal Overview translator.
-let lastRequestedLanguage = "en";
 let translationGeneration = 0; // Invalidates responses from older UI modes/videos.
 let translationWorkCount = 0;
-let isTranslating = false;
-// Translation cache: Map of "videoId:lang:contentType" → translated content
-// This avoids re-translating the same content when switching tabs or languages
-let translationCache = new Map();
 let transcriptScrollObserver = null;
 // Stable keys include the video, source mode, language, and semantic segment ID.
 let transcriptParagraphCache = new Map();
@@ -397,9 +389,6 @@ function setupEventListeners() {
     });
   });
 
-  // Clean up toggle tooltip
-  setupCleanupToggleTooltip();
-
   // Follow playback button — re-enables auto-scroll after user scrolled away
   document
     .getElementById("followPlaybackBtn")
@@ -560,24 +549,12 @@ async function startDigest(videoId, videoUrl) {
     currentTranscript = cached.transcript;
     currentTranscriptText = cached.transcriptText;
     currentTranscriptTimestamped = cached.transcriptTimestamped;
-    currentTranscriptSource = cached.transcriptSource || null;
     currentTranscriptLanguage = cached.transcriptLanguage || null;
-    currentAvailableTranscriptLanguages = Array.isArray(
-      cached.availableTranscriptLanguages,
-    )
-      ? cached.availableTranscriptLanguages
-      : [];
     currentEnhancedTranscript = cached.enhancedTranscript || null;
     isTranscriptCleanedUp = !!cached.enhancedTranscript;
     isAnalysisLoading = false;
 
-    // Restore translation caches from persistent storage
-    if (cached.translationCache) {
-      for (const [key, value] of Object.entries(cached.translationCache)) {
-        translationCache.set(key, value);
-      }
-    }
-    // Restore per-entry/paragraph translation cache (individual chunk translations)
+    // Restore semantic-segment translations from persistent storage.
     if (cached.paragraphCache) {
       for (const [key, value] of Object.entries(cached.paragraphCache)) {
         transcriptParagraphCache.set(key, value);
@@ -624,9 +601,7 @@ async function startDigest(videoId, videoUrl) {
   currentTranscript = null;
   currentTranscriptText = null;
   currentTranscriptTimestamped = null;
-  currentTranscriptSource = null;
   currentTranscriptLanguage = null;
-  currentAvailableTranscriptLanguages = [];
   currentEnhancedTranscript = null;
   isTranscriptCleanedUp = false;
   isAnalysisLoading = false;
@@ -644,7 +619,6 @@ async function startDigest(videoId, videoUrl) {
   const transcriptResult = await chrome.runtime.sendMessage({
     action: "fetchTranscript",
     videoId: videoId,
-    videoUrl: videoUrl,
   });
 
   if (!transcriptResult.success) {
@@ -665,13 +639,7 @@ async function startDigest(videoId, videoUrl) {
   currentTranscript = transcriptResult.transcript;
   currentTranscriptText = transcriptResult.transcriptText;
   currentTranscriptTimestamped = transcriptResult.transcriptTextTimestamped;
-  currentTranscriptSource = transcriptResult.source || null; // null (subtitles only)
   currentTranscriptLanguage = transcriptResult.language || null;
-  currentAvailableTranscriptLanguages = Array.isArray(
-    transcriptResult.availableLanguages,
-  )
-    ? transcriptResult.availableLanguages
-    : [];
 
   // Render transcript immediately (no LLM needed)
   renderTranscript();
@@ -796,7 +764,6 @@ async function saveQuoteAsNote(quote, btn) {
       timestamp: quote.timestampSeconds,
       videoTitle: currentVideoTitle,
       channelName: currentChannelName,
-      videoUrl: currentVideoUrl || `https://youtube.com/watch?v=${currentVideoId}`,
     });
 
     if (result.success) {
@@ -1523,16 +1490,7 @@ async function saveToCache(videoId) {
   if (!videoId || !currentTranscript) return;
 
   try {
-    // Build a serializable version of translation cache for this video
-    const translationCacheForVideo = {};
-    for (const [key, value] of translationCache.entries()) {
-      if (key.startsWith(`${videoId}:`)) {
-        translationCacheForVideo[key] = value;
-      }
-    }
-
-    // Also persist per-entry/paragraph translation cache for this video
-    // These are the individual chunk translations (entry:N or para:N keys)
+    // Persist semantic-segment translations for this video.
     const paragraphCacheForVideo = {};
     for (const [key, value] of transcriptParagraphCache.entries()) {
       if (key.startsWith(`${videoId}:`)) {
@@ -1545,13 +1503,10 @@ async function saveToCache(videoId) {
       transcript: currentTranscript,
       transcriptText: currentTranscriptText,
       transcriptTimestamped: currentTranscriptTimestamped,
-      transcriptSource: currentTranscriptSource,
       transcriptLanguage: currentTranscriptLanguage,
-      availableTranscriptLanguages: currentAvailableTranscriptLanguages,
       enhancedTranscript: currentEnhancedTranscript,
       videoTitle: currentVideoTitle,
       channelName: currentChannelName,
-      translationCache: translationCacheForVideo,
       paragraphCache: paragraphCacheForVideo,
       timestamp: Date.now(),
     };
@@ -1930,835 +1885,13 @@ function onContentAreaScroll() {
   }
 }
 
-// ============================================================
-// TRANSLATION — Language switching and content translation
-// ============================================================
-// When the user picks ZH or JA from the language dropdown, we translate
-// ONLY the currently visible tab (lazy). Translations are cached in a Map
-// so switching back and forth is instant. Switching to EN always shows
-// the original content immediately with zero API calls.
-
 /**
- * Called when the user changes the language dropdown.
- * If switching to EN, we instantly re-render originals.
- * If switching to ZH/JA, we translate the currently active tab.
- *
- * @param {string} newLang - 'en', 'zh', or 'ja'
- */
-async function handleLanguageChange(newLang) {
-  // If nothing changed, bail out
-  if (newLang === currentLanguage) return;
-
-  const previousLang = currentLanguage;
-  currentLanguage = newLang;
-  lastRequestedLanguage = newLang;
-
-  // Update visual indicator on the dropdown
-  const selector = document.getElementById("langSelector");
-  if (newLang !== "en") {
-    selector.classList.add("active-lang");
-  } else {
-    selector.classList.remove("active-lang");
-  }
-
-  // If switching back to English, just re-render originals instantly
-  if (newLang === "en") {
-    restoreOriginalContent();
-    return;
-  }
-
-  // Otherwise, translate the currently visible tab
-  const activeTab = document.querySelector(".tab.active")?.dataset.tab;
-  if (activeTab && activeTab !== "notes") {
-    await translateCurrentTab(activeTab);
-  }
-}
-
-/**
- * Re-renders all content in English (the original).
- * No API call needed — we just render from the existing state variables.
- */
-function restoreOriginalContent() {
-  // Stop any scroll-based translation observer
-  if (transcriptScrollObserver) {
-    transcriptScrollObserver.disconnect();
-    transcriptScrollObserver = null;
-  }
-
-  // Transcript
-  if (isTranscriptCleanedUp && currentEnhancedTranscript) {
-    renderCleanedUpTranscript(currentEnhancedTranscript);
-  } else if (currentTranscript) {
-    renderTranscript();
-  }
-
-  // Sync toggle state
-  setCleanupToggleState(isTranscriptCleanedUp);
-
-  // Overview
-  if (currentAnalysis) {
-    renderAnalysisResults(currentAnalysis);
-  }
-}
-
-/**
- * Translates the content of the currently active tab.
- * Checks the cache first — only makes an API call if uncached.
- *
- * @param {string} tabName - 'transcript' or 'overview'
- */
-async function translateCurrentTab(tabName) {
-  // Don't translate notes (user-generated content)
-  if (tabName === "notes") return;
-
-  // Check if we already have a translation cached
-  const cacheKey = `${currentVideoId}:${currentLanguage}:${tabName}`;
-  if (translationCache.has(cacheKey)) {
-    renderTranslatedContent(tabName, translationCache.get(cacheKey));
-    return;
-  }
-
-  // Check if there's content to translate
-  const hasContent = checkTabHasContent(tabName);
-  if (!hasContent) return; // Nothing to translate yet — will translate when content arrives
-
-  // Route to the appropriate translation function
-  switch (tabName) {
-    case "transcript":
-      await translateTranscript();
-      break;
-    case "overview":
-      await translateOverview();
-      break;
-  }
-}
-
-/**
- * Checks if a tab has content ready to translate.
- *
- * @param {string} tabName - The tab name
- * @returns {boolean} - True if the tab has content
- */
-function checkTabHasContent(tabName) {
-  switch (tabName) {
-    case "transcript":
-      return !!(currentEnhancedTranscript || currentTranscriptText);
-    case "overview":
-      return !!currentAnalysis;
-    default:
-      return false;
-  }
-}
-
-/**
- * Shows/hides the small spinner next to the language dropdown.
- *
- * @param {boolean} show - True to show, false to hide
- */
-function setTranslatingSpinner(show) {
-  isTranslating = show;
-  const spinner = document.getElementById("langSpinner");
-  if (spinner) {
-    spinner.classList.toggle("visible", show);
-  }
-}
-
-/**
- * Translates the transcript tab using scroll-based lazy loading.
- *
- * Works in two modes depending on transcript type:
- *
- * RAW TRANSCRIPT (default):
- * - Keeps the timestamp-grouped .transcript-entry layout intact
- * - Each 30-second group is a translation unit
- * - IntersectionObserver watches entries and translates text in-place
- * - Timestamps remain untouched, only the text portion gets translated
- *
- * ENHANCED TRANSCRIPT:
- * - Uses paragraph-based lazy translation (no timestamps to preserve)
- * - Splits by paragraph breaks, translates visible paragraphs
- *
- * Both modes use the same batch + observer pattern for fast initial load.
- */
-async function translateTranscript() {
-  // --- CLEANED-UP TRANSCRIPT MODE ---
-  // Same timestamped layout as raw mode; translate just the text portion.
-  if (isTranscriptCleanedUp && currentEnhancedTranscript) {
-    if (!currentEnhancedTranscript.length) return;
-
-    const lang = currentLanguage;
-    const entryCachePrefix = `${currentVideoId}:${lang}:cleanupentry:`;
-
-    if (transcriptScrollObserver) {
-      transcriptScrollObserver.disconnect();
-      transcriptScrollObserver = null;
-    }
-
-    const cleanedEntries = currentEnhancedTranscript;
-    const originalTexts = cleanedEntries.map((e) => e.text);
-
-    renderCleanedUpTranscript(cleanedEntries);
-
-    const transcriptList = document.getElementById("transcriptList");
-    const entries = transcriptList.querySelectorAll(".transcript-entry");
-
-    entries.forEach((entry, index) => {
-      entry.dataset.entryIndex = index;
-
-      const cached = transcriptParagraphCache.get(entryCachePrefix + index);
-      if (cached) {
-        const textSpan = entry.querySelector(".transcript-text");
-        if (textSpan) textSpan.innerHTML = renderSubtitleInlineMarkup(cached);
-        entry.classList.add("translated");
-      } else {
-        entry.classList.add("translating");
-      }
-    });
-
-    const scrollContainer = document.getElementById("contentArea");
-    const pendingBatches = new Set();
-    const batchQueue = [];
-    let isProcessingQueue = false;
-
-    async function processNextBatch() {
-      if (isProcessingQueue || batchQueue.length === 0) return;
-      if (lang !== lastRequestedLanguage) return;
-
-      isProcessingQueue = true;
-      const batch = batchQueue.splice(0, 1);
-      await translateEntryBatch(
-        batch,
-        originalTexts,
-        lang,
-        entryCachePrefix,
-        pendingBatches,
-      );
-      isProcessingQueue = false;
-
-      if (batchQueue.length > 0) {
-        processNextBatch();
-      } else {
-        updateCache();
-      }
-    }
-
-    transcriptScrollObserver = new IntersectionObserver(
-      (observerEntries) => {
-        let addedNew = false;
-
-        observerEntries.forEach((obsEntry) => {
-          if (!obsEntry.isIntersecting) return;
-          const div = obsEntry.target;
-          const index = parseInt(div.dataset.entryIndex);
-          if (div.classList.contains("translated")) return;
-          if (pendingBatches.has(index)) return;
-
-          batchQueue.push(index);
-          pendingBatches.add(index);
-          addedNew = true;
-        });
-
-        if (addedNew) {
-          batchQueue.sort((a, b) => a - b);
-          processNextBatch();
-        }
-      },
-      {
-        root: scrollContainer,
-        rootMargin: "300px 0px",
-        threshold: 0,
-      },
-    );
-
-    entries.forEach((entry) => transcriptScrollObserver.observe(entry));
-    return;
-  }
-
-  // --- RAW TRANSCRIPT MODE ---
-  // Keep the [timestamp] text layout, translate just the text portion of each group
-  if (!currentTranscript || !currentTranscript.length) return;
-
-  const lang = currentLanguage;
-  const entryCachePrefix = `${currentVideoId}:${lang}:entry:`;
-
-  if (transcriptScrollObserver) {
-    transcriptScrollObserver.disconnect();
-    transcriptScrollObserver = null;
-  }
-
-  // Group entries using the same smart chunking as renderTranscript
-  const grouped = groupTranscriptEntries(currentTranscript);
-
-  // Store original texts before we touch the DOM (these are the API translation inputs)
-  const originalTexts = grouped.map((g) => g.texts.join(" "));
-
-  // Re-render the raw transcript to get fresh .transcript-entry elements
-  renderTranscript();
-
-  // Get all rendered entries and add index + translation state
-  const transcriptList = document.getElementById("transcriptList");
-  const entries = transcriptList.querySelectorAll(".transcript-entry");
-
-  entries.forEach((entry, index) => {
-    entry.dataset.entryIndex = index;
-
-    const cached = transcriptParagraphCache.get(entryCachePrefix + index);
-    if (cached) {
-      // Replace just the text portion, keep timestamp intact
-      const textSpan = entry.querySelector(".transcript-text");
-      if (textSpan) textSpan.innerHTML = renderSubtitleInlineMarkup(cached);
-      entry.classList.add("translated");
-    } else {
-      // Mark as pending translation (dimmed with pulsing indicator)
-      entry.classList.add("translating");
-    }
-  });
-
-  // Set up queue-based sequential translation.
-  // Instead of firing API calls for ALL visible entries at once (which floods
-  // the API and makes everything slow), we queue them and process 5 at a time.
-  // This way results appear progressively — first 5 entries translate, then next 5, etc.
-  const scrollContainer = document.getElementById("contentArea");
-  const pendingBatches = new Set();
-  const batchQueue = []; // Queue of entry indices waiting to be translated
-  let isProcessingQueue = false;
-
-  // Pulls up to 5 entries from the queue and translates them, then repeats
-  async function processNextBatch() {
-    if (isProcessingQueue || batchQueue.length === 0) return;
-    if (lang !== lastRequestedLanguage) return; // Language changed, abort
-
-    isProcessingQueue = true;
-    const batch = batchQueue.splice(0, 1); // Translate 1 entry per API call — fast response
-    await translateEntryBatch(
-      batch,
-      originalTexts,
-      lang,
-      entryCachePrefix,
-      pendingBatches,
-    );
-    isProcessingQueue = false;
-
-    // If there are more entries queued, process the next batch
-    if (batchQueue.length > 0) {
-      processNextBatch();
-    } else {
-      // Queue empty — persist translations to storage so reopening this video is instant
-      updateCache();
-    }
-  }
-
-  transcriptScrollObserver = new IntersectionObserver(
-    (observerEntries) => {
-      let addedNew = false;
-
-      observerEntries.forEach((obsEntry) => {
-        if (!obsEntry.isIntersecting) return;
-        const div = obsEntry.target;
-        const index = parseInt(div.dataset.entryIndex);
-        if (div.classList.contains("translated")) return;
-        if (pendingBatches.has(index)) return;
-
-        // Add to queue instead of translating immediately
-        batchQueue.push(index);
-        pendingBatches.add(index);
-        addedNew = true;
-      });
-
-      if (addedNew) {
-        // Sort so we translate top-to-bottom (natural reading order)
-        batchQueue.sort((a, b) => a - b);
-        // Kick off processing if not already running
-        processNextBatch();
-      }
-    },
-    {
-      root: scrollContainer,
-      rootMargin: "300px 0px", // 300px ahead for smooth pre-loading
-      threshold: 0,
-    },
-  );
-
-  // Start observing all untranslated entries
-  entries.forEach((entry) => {
-    if (!entry.classList.contains("translated")) {
-      transcriptScrollObserver.observe(entry);
-    }
-  });
-}
-
-/**
- * Translates a batch of raw transcript entries and updates the DOM in-place.
- * Each entry keeps its timestamp — only the text portion gets translated.
- * Uses the same ---PARAGRAPH_BREAK--- delimiter as enhanced mode for consistency.
- *
- * @param {number[]} indices - Array of entry indices to translate
- * @param {string[]} originalTexts - The original text for each entry (from 30-second groups)
- * @param {string} lang - Target language ('zh' or 'ja')
- * @param {string} cachePrefix - Cache key prefix for this video+lang
- * @param {Set} pendingBatches - Set tracking in-flight entry indices
- */
-async function translateEntryBatch(
-  indices,
-  originalTexts,
-  lang,
-  cachePrefix,
-  pendingBatches,
-) {
-  // Join batch entries with delimiter so we translate them in one API call
-  const DELIMITER = "\n\n---PARAGRAPH_BREAK---\n\n";
-  const batchText = indices.map((i) => originalTexts[i]).join(DELIMITER);
-
-  setTranslatingSpinner(true);
-
-  try {
-    const result = await sendTranslationMessage({
-      action: "translateContent",
-      content: batchText,
-      contentType: "transcript",
-      targetLanguage: lang,
-      videoTitle: currentVideoTitle,
-    });
-
-    // Guard: if user switched language while we were translating, discard result
-    if (lang !== lastRequestedLanguage) return;
-
-    if (result.success && result.translatedContent) {
-      // Split translated text back into individual entries
-      const translatedParts = result.translatedContent.split(
-        /---PARAGRAPH_BREAK---/,
-      );
-
-      indices.forEach((entryIndex, i) => {
-        const translatedText = (translatedParts[i] || "").trim();
-        if (!translatedText) return;
-
-        // Cache this entry's translation
-        transcriptParagraphCache.set(cachePrefix + entryIndex, translatedText);
-
-        // Update the DOM: replace text span content, keep timestamp
-        const entry = document.querySelector(
-          `.transcript-entry[data-entry-index="${entryIndex}"]`,
-        );
-        if (entry) {
-          const textSpan = entry.querySelector(".transcript-text");
-          if (textSpan) {
-            textSpan.innerHTML = renderSubtitleInlineMarkup(translatedText);
-          }
-          entry.classList.remove("translating");
-          entry.classList.add("translated");
-
-          // Stop observing — this entry is done
-          if (transcriptScrollObserver) {
-            transcriptScrollObserver.unobserve(entry);
-          }
-        }
-      });
-
-      // Update the full transcript cache for instant tab-switching
-      updateFullTranscriptCache(lang);
-    } else {
-      console.error(
-        "[YT Digest] Entry batch translation failed:",
-        result.error,
-      );
-    }
-  } catch (error) {
-    console.error("[YT Digest] Entry batch translation error:", error);
-  } finally {
-    indices.forEach((i) => pendingBatches.delete(i));
-    setTranslatingSpinner(false);
-  }
-}
-
-/**
- * Translates a batch of paragraphs and updates the DOM as each batch returns.
- *
- * @param {number[]} indices - Array of paragraph indices to translate
- * @param {string[]} paragraphs - The full array of source paragraphs
- * @param {string} lang - Target language ('zh' or 'ja')
- * @param {string} cachePrefix - Cache key prefix for this video+lang
- * @param {Set} pendingBatches - Set tracking in-flight paragraph indices
- */
-async function translateParagraphBatch(
-  indices,
-  paragraphs,
-  lang,
-  cachePrefix,
-  pendingBatches,
-) {
-  // Combine the batch paragraphs into one string separated by a unique delimiter
-  // The API translates them as one block, then we split them back apart
-  const DELIMITER = "\n\n---PARAGRAPH_BREAK---\n\n";
-  const batchText = indices.map((i) => paragraphs[i].trim()).join(DELIMITER);
-
-  setTranslatingSpinner(true);
-
-  try {
-    const result = await sendTranslationMessage({
-      action: "translateContent",
-      content: batchText,
-      contentType: "transcript",
-      targetLanguage: lang,
-      videoTitle: currentVideoTitle,
-    });
-
-    // Guard: if user switched language while translating, discard
-    if (lang !== lastRequestedLanguage) return;
-
-    if (result.success && result.translatedContent) {
-      // Split the translated text back into individual paragraphs
-      const translatedParts = result.translatedContent.split(
-        /---PARAGRAPH_BREAK---/,
-      );
-
-      indices.forEach((paraIndex, i) => {
-        const translatedText = (translatedParts[i] || "").trim();
-        if (!translatedText) return;
-
-        // Cache the translated paragraph
-        transcriptParagraphCache.set(cachePrefix + paraIndex, translatedText);
-
-        // Update the DOM element
-        const div = document.querySelector(
-          `.transcript-paragraph[data-para-index="${paraIndex}"]`,
-        );
-        if (div) {
-          div.textContent = translatedText;
-          div.classList.remove("translating");
-          div.classList.add("translated");
-
-          // Stop observing this paragraph (it's done)
-          if (transcriptScrollObserver) {
-            transcriptScrollObserver.unobserve(div);
-          }
-        }
-      });
-
-      // Also update the full transcript cache so switching back and forth is instant
-      updateFullTranscriptCache(lang);
-    } else {
-      console.error(
-        "[YT Digest] Paragraph batch translation failed:",
-        result.error,
-      );
-    }
-  } catch (error) {
-    console.error("[YT Digest] Paragraph batch translation error:", error);
-  } finally {
-    // Remove from pending set
-    indices.forEach((i) => pendingBatches.delete(i));
-    setTranslatingSpinner(false);
-  }
-}
-
-/**
- * Rebuilds the full transcript translation cache from individual caches.
- * For raw transcripts: uses per-entry cache (entry:N keys)
- * For enhanced transcripts: uses per-paragraph cache (para:N keys)
- * Called after each batch completes so switching languages/tabs is instant.
- *
- * @param {string} lang - The target language
- */
-function updateFullTranscriptCache(lang) {
-  const fullCacheKey = `${currentVideoId}:${lang}:transcript`;
-
-  if (!isTranscriptCleanedUp && currentTranscript) {
-    // Raw transcript mode: collect per-entry translations
-    const entryPrefix = `${currentVideoId}:${lang}:entry:`;
-    const translatedEntries = [];
-    let index = 0;
-    while (transcriptParagraphCache.has(entryPrefix + index)) {
-      translatedEntries.push(transcriptParagraphCache.get(entryPrefix + index));
-      index++;
-    }
-    if (translatedEntries.length > 0) {
-      // Store as JSON with type marker so renderTranslatedTranscript knows the format
-      translationCache.set(
-        fullCacheKey,
-        JSON.stringify({ type: "entries", entries: translatedEntries }),
-      );
-    }
-  } else if (isTranscriptCleanedUp && currentEnhancedTranscript) {
-    // Cleaned-up transcript mode: collect per-entry translations
-    const entryPrefix = `${currentVideoId}:${lang}:cleanupentry:`;
-    const translatedEntries = [];
-    let index = 0;
-    while (transcriptParagraphCache.has(entryPrefix + index)) {
-      translatedEntries.push(transcriptParagraphCache.get(entryPrefix + index));
-      index++;
-    }
-    if (translatedEntries.length > 0) {
-      translationCache.set(
-        fullCacheKey,
-        JSON.stringify({ type: "entries", entries: translatedEntries }),
-      );
-    }
-  }
-}
-
-/**
- * Translates the overview tab content (chapters and key quotes).
- * Sends the relevant analysis fields as JSON and gets back translated JSON.
- */
-async function translateOverview() {
-  if (!currentAnalysis) return;
-
-  const lang = currentLanguage;
-  const cacheKey = `${currentVideoId}:${lang}:overview`;
-
-  setTranslatingSpinner(true);
-
-  try {
-    // Build a JSON payload with just the translatable fields
-    const overviewPayload = {
-      chapters: (currentAnalysis.chapters || []).map((ch) => ({
-        title: ch.title,
-        summary: ch.summary || "",
-        timestamp: ch.timestamp,
-        timestampSeconds: ch.timestampSeconds,
-      })),
-      keyQuotes: (currentAnalysis.keyQuotes || []).map((q) => ({
-        quote: q.quote,
-        timestamp: q.timestamp,
-        timestampSeconds: q.timestampSeconds,
-      })),
-    };
-
-    const result = await sendTranslationMessage({
-      action: "translateContent",
-      content: overviewPayload,
-      contentType: "overview",
-      targetLanguage: lang,
-      videoTitle: currentVideoTitle,
-    });
-
-    if (lang !== lastRequestedLanguage) return;
-
-    const normalized = YTD_SETTINGS.normalizeTranslatedOverview(
-      result.translatedContent,
-      overviewPayload,
-    );
-    if (result.success && normalized) {
-      translationCache.set(cacheKey, normalized);
-      renderTranslatedContent("overview", normalized);
-      await updateCache(); // Persist translation to storage
-    } else {
-      console.error(
-        "[YT Digest] Overview translation failed:",
-        result.error || "Unexpected translated overview structure",
-      );
-    }
-  } catch (error) {
-    console.error("[YT Digest] Overview translation error:", error);
-  } finally {
-    setTranslatingSpinner(false);
-  }
-}
-
-/**
- * Renders translated content into the appropriate tab.
- * This is the "display" step — it takes translated data and puts it on screen.
- *
- * @param {string} tabName - Which tab to render into
- * @param {*} translatedContent - The translated content (string or object depending on tab)
- */
-function renderTranslatedContent(tabName, translatedContent) {
-  switch (tabName) {
-    case "transcript":
-      renderTranslatedTranscript(translatedContent);
-      break;
-    case "overview":
-      renderTranslatedOverview(translatedContent);
-      break;
-  }
-}
-
-/**
- * Renders a fully translated transcript from cache.
- * Handles two formats:
- * - Raw transcript: renders with timestamp layout (.transcript-entry) — timestamps preserved
- * - Enhanced transcript: renders as paragraphs (.transcript-paragraph)
- *
- * @param {string} translatedData - Cached translation (JSON for raw, plain text for enhanced)
- */
-function renderTranslatedTranscript(translatedData) {
-  const transcriptList = document.getElementById("transcriptList");
-  transcriptList.innerHTML = "";
-
-  // Try to parse as structured data (raw transcript mode stores as JSON with type marker)
-  let parsed = null;
-  if (typeof translatedData === "string") {
-    try {
-      const obj = JSON.parse(translatedData);
-      if (obj && obj.type === "entries") {
-        parsed = obj;
-      }
-    } catch (e) {
-      // Not JSON — it's an enhanced transcript (plain text)
-    }
-  }
-
-  // Raw or cleaned-up transcript mode: render with timestamps
-  if (
-    parsed &&
-    parsed.type === "entries" &&
-    ((currentTranscript && currentTranscript.length) ||
-      (currentEnhancedTranscript && currentEnhancedTranscript.length))
-  ) {
-    // Use cleaned-up entries when toggle is on, otherwise raw grouped entries
-    const entries = isTranscriptCleanedUp
-      ? currentEnhancedTranscript
-      : groupTranscriptEntries(currentTranscript);
-
-    entries.forEach((entry, index) => {
-      const div = document.createElement("div");
-      div.className = "transcript-entry translated";
-      div.dataset.seconds = entry.start;
-      div.dataset.entryIndex = index;
-
-      const minutes = Math.floor(entry.start / 60);
-      const seconds = entry.start % 60;
-      const timestamp = `${minutes}:${String(seconds).padStart(2, "0")}`;
-
-      // Use translated text if available, fall back to original
-      const originalText = isTranscriptCleanedUp
-        ? entry.text
-        : entry.texts.join(" ");
-      const translatedText = parsed.entries[index] || originalText;
-
-      div.innerHTML = `
-        <span class="transcript-time">${timestamp}</span>
-        <span class="transcript-text">${renderSubtitleInlineMarkup(translatedText)}</span>
-      `;
-
-      div.addEventListener("click", (event) =>
-        seekFromTranscriptEntryClick(event, entry.start),
-      );
-      transcriptList.appendChild(div);
-    });
-
-    return;
-  }
-
-  // Fallback: render as plain paragraphs
-  const text = typeof translatedData === "string" ? translatedData : "";
-  const paragraphs = text.split(/\n\n+/);
-
-  paragraphs.forEach((para) => {
-    if (!para.trim()) return;
-
-    const div = document.createElement("div");
-    div.className = "transcript-paragraph translated";
-    div.textContent = para.trim();
-    transcriptList.appendChild(div);
-  });
-}
-
-/**
- * Renders translated overview content.
- * Merges translated text fields with original timestamps/structure.
- *
- * @param {Object} translatedOverview - Object with chapters and keyQuotes
- */
-function renderTranslatedOverview(translatedOverview) {
-  const normalized = YTD_SETTINGS.normalizeTranslatedOverview(
-    translatedOverview,
-    currentAnalysis,
-  );
-  if (!normalized) {
-    console.error(
-      "[YT Digest] Ignoring malformed translated overview from cache",
-    );
-    renderAnalysisResults(currentAnalysis || {});
-    return;
-  }
-
-  // Chapters — use translated title/summary but keep original timestamps
-  if (normalized.chapters.length) {
-    const chapterList = document.getElementById("chapterList");
-    chapterList.innerHTML = "";
-
-    normalized.chapters.forEach((chapter, index) => {
-      // Grab the original timestamp data (fallback to translated data if same structure)
-      const origChapter = currentAnalysis?.chapters?.[index] || chapter;
-      const li = document.createElement("li");
-      li.className = "chapter-item";
-      li.dataset.seconds =
-        origChapter.timestampSeconds || chapter.timestampSeconds;
-      li.innerHTML = `
-        <span class="chapter-timestamp">${escapeHtml(origChapter.timestamp || chapter.timestamp)}</span>
-        <div class="chapter-content">
-          <span class="chapter-title">${escapeHtml(chapter.title)}</span>
-          <span class="chapter-summary">${escapeHtml(chapter.summary || "")}</span>
-        </div>
-      `;
-      li.addEventListener("click", () => {
-        seekTo(origChapter.timestampSeconds || chapter.timestampSeconds);
-      });
-      chapterList.appendChild(li);
-    });
-  }
-
-  // Key Quotes — use translated quote text but keep original timestamps
-  if (normalized.keyQuotes.length) {
-    const quotesList = document.getElementById("quotesList");
-    quotesList.innerHTML = "";
-
-    const sorted = [...normalized.keyQuotes].sort(
-      (a, b) => (a.timestampSeconds || 0) - (b.timestampSeconds || 0),
-    );
-
-    sorted.forEach((quote, index) => {
-      const origQuote = currentAnalysis?.keyQuotes?.[index] || quote;
-      const div = document.createElement("div");
-      div.className = "quote-item";
-      div.dataset.seconds = origQuote.timestampSeconds || quote.timestampSeconds;
-      div.innerHTML = `
-        <div class="quote-text">${escapeHtml(quote.quote)}</div>
-        <div class="quote-meta">
-          <span class="quote-timestamp">${escapeHtml(origQuote.timestamp || quote.timestamp)}</span>
-          <button class="quote-copy-btn" title="Copy this quote">⧉ Copy</button>
-        </div>
-      `;
-      div.addEventListener("click", () => {
-        seekTo(origQuote.timestampSeconds || quote.timestampSeconds);
-      });
-
-      const quoteCopyBtn = div.querySelector(".quote-copy-btn");
-      quoteCopyBtn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        try {
-          await navigator.clipboard.writeText(quote.quote);
-          quoteCopyBtn.textContent = "✓ Copied";
-          setTimeout(() => {
-            quoteCopyBtn.textContent = "⧉ Copy";
-          }, 1500);
-        } catch (err) {
-          console.error("Copy failed:", err);
-        }
-      });
-
-      quotesList.appendChild(div);
-    });
-  }
-}
-
-/**
- * Clears translation cache entries for a specific content type.
+ * Clears cached transcript segment translations.
  * Called when content changes (e.g., after enhancing transcript).
  *
- * @param {string} contentType - 'transcript' or 'overview'
+ * @param {string} contentType - Must be 'transcript'
  */
 function clearTranslationCacheForType(contentType) {
-  // Delete all cache entries that match this content type
-  for (const key of translationCache.keys()) {
-    if (key.endsWith(`:${contentType}`)) {
-      translationCache.delete(key);
-    }
-  }
-
-  // If clearing transcript, also clear the per-paragraph cache
   if (contentType === "transcript") {
     transcriptParagraphCache.clear();
   }
@@ -2810,8 +1943,6 @@ async function handleTranscriptModeChange(mode) {
   if (mode === currentTranscriptMode) return;
 
   currentTranscriptMode = mode;
-  currentLanguage = mode === "original" ? "en" : "zh";
-  lastRequestedLanguage = currentLanguage;
   translationGeneration += 1;
   translationWorkCount = 0;
   setTranslatingSpinner(false);
@@ -2988,8 +2119,7 @@ async function requestTranscriptTranslationBatch(
     const isStale =
       generation !== translationGeneration ||
       videoId !== currentVideoId ||
-      mode !== currentTranscriptMode ||
-      lastRequestedLanguage !== "zh";
+      mode !== currentTranscriptMode;
     if (isStale) return;
 
     const responseSegments = result?.success
@@ -3052,8 +2182,6 @@ async function translateTranscript() {
   const generation = translationGeneration;
   const videoId = currentVideoId;
   const mode = currentTranscriptMode;
-  currentLanguage = "zh";
-  lastRequestedLanguage = "zh";
   if (transcriptScrollObserver) transcriptScrollObserver.disconnect();
 
   const rows = renderTranscriptModeRows(segments, mode);
@@ -3122,46 +2250,9 @@ async function translateTranscript() {
 function setTranslatingSpinner(show) {
   if (show) translationWorkCount += 1;
   else translationWorkCount = Math.max(0, translationWorkCount - 1);
-  isTranslating = translationWorkCount > 0;
+  const isTranslating = translationWorkCount > 0;
   const spinner = document.getElementById("langSpinner");
   if (spinner) spinner.classList.toggle("visible", isTranslating);
-}
-
-/**
- * Shows a cost estimate tooltip when hovering the Clean up toggle.
- * Estimate: ~1.5 tokens per word for input + output combined.
- * DeepSeek-V3 list price: ~$0.14 / $0.28 per 1M tokens (input/output).
- * We use the cached word count from the current transcript text.
- */
-function setupCleanupToggleTooltip() {
-  const btn = document.getElementById("enhanceBtn");
-  if (!btn) return;
-
-  let tooltip = document.getElementById("cleanupTooltip");
-  if (!tooltip) {
-    tooltip = document.createElement("div");
-    tooltip.id = "cleanupTooltip";
-    tooltip.className = "cleanup-tooltip";
-    btn.appendChild(tooltip);
-  }
-
-  function updateTooltip() {
-    const wordCount = (currentTranscriptText || "").trim().split(/\s+/).filter(
-      (w) => w.length > 0,
-    ).length;
-    const estimatedTokens = Math.ceil(wordCount * 1.5);
-    const estimatedCost = (estimatedTokens / 1_000_000) * 0.42; // blended $0.42 per 1M tokens
-    tooltip.textContent = `~${estimatedTokens.toLocaleString()} tokens · est. $${estimatedCost.toFixed(4)}`;
-  }
-
-  btn.addEventListener("mouseenter", () => {
-    updateTooltip();
-    tooltip.classList.add("visible");
-  });
-
-  btn.addEventListener("mouseleave", () => {
-    tooltip.classList.remove("visible");
-  });
 }
 
 // Pure helpers are exposed for the repository's Node tests. The extension does
