@@ -192,15 +192,22 @@ function isVisibleDigestHost(element) {
 /**
  * YouTube keeps hidden copies of its responsive action toolbar in the DOM.
  * querySelector() can return one of those 0x0 copies before the toolbar the
- * viewer can actually see, so inspect every candidate and prefer the visible
- * #actions-inner that belongs to the current video's metadata.
+ * viewer can actually see, so inspect every candidate and resolve the native
+ * button group inside the visible action row for the current video.
  */
 function findDigestButtonHost() {
   const primaryActionRows = Array.from(
     document.querySelectorAll("ytd-watch-metadata #actions-inner"),
   );
-  const visibleActionRow = primaryActionRows.find(isVisibleDigestHost);
-  if (visibleActionRow) return visibleActionRow;
+
+  for (const actionRow of primaryActionRows) {
+    if (!isVisibleDigestHost(actionRow)) continue;
+
+    const visibleButtonGroup = Array.from(
+      actionRow.querySelectorAll("#top-level-buttons-computed"),
+    ).find(isVisibleDigestHost);
+    if (visibleButtonGroup) return visibleButtonGroup;
+  }
 
   const fallbackCandidates = Array.from(
     document.querySelectorAll(
@@ -246,10 +253,15 @@ function createDigestButton() {
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
-    margin-left: 8px;
+    margin-right: 8px;
     transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
     box-shadow: 0 2px 8px rgba(200, 103, 79, 0.3);
-    flex-shrink: 0;
+    flex: 0 0 auto;
+    align-self: center;
+    width: max-content;
+    min-width: max-content;
+    max-width: max-content;
+    white-space: nowrap;
   `;
 
   // Hover effects
@@ -322,15 +334,11 @@ function injectDigestButton() {
   });
 
   if (digestButton.parentElement !== actionsContainer) {
-    // #actions-inner is outside YouTube's horizontally shrinkable native
-    // button list. Keeping Digest as its own sibling prevents it from being
-    // clipped when the watch page gets narrow. The fallback host uses prepend
-    // so Digest receives visibility priority on older YouTube layouts.
-    if (actionsContainer.id === "actions-inner") {
-      actionsContainer.appendChild(digestButton);
-    } else {
-      actionsContainer.insertBefore(digestButton, actionsContainer.firstChild);
-    }
+    // YouTube turns #actions-inner into a vertical flex column at narrow
+    // breakpoints. A direct child there stretches into a full-width second
+    // row, so keep Digest inside the native horizontal button group and
+    // prepend it to preserve visibility when space is limited.
+    actionsContainer.insertBefore(digestButton, actionsContainer.firstChild);
   }
 
   debugLog("[YouTube Digest Content] Digest button reconciled");
