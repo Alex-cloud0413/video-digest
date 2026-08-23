@@ -1,12 +1,11 @@
 /*
- * SIDE PANEL STYLES — "Calm Terracotta" (Light Mode)
+ * SIDE PANEL STYLES — YouTube red with browser-driven light/dark surfaces.
  *
  * Design philosophy:
- * - Warm, editorial, unhurried. The opposite of shouty.
- * - Soft cream paper background; white cards float on it with gentle shadows.
+ * - Editorial and readable, with YouTube red as the clear action color.
+ * - The panel follows the browser/system color preference: white or black.
  * - Rounded corners everywhere (no sharp brutalist edges).
- * - Terracotta is the single warm accent, used sparingly; sage is a quiet
- *   secondary. Red is gone.
+ * - YouTube red is the single color accent; all other text uses neutral ink.
  * - Fully sans-serif, using system fonts so the extension makes no font
  *   requests to third parties.
  */
@@ -15,29 +14,30 @@
    CSS VARIABLES (design tokens)
    ============================================================ */
 :root {
-  /* Surfaces & ink — all warm-toned, never pure grey */
-  --bg: #f7f3ec;
+  color-scheme: light dark;
+  /* YouTube-like light surfaces and neutral ink */
+  --bg: #ffffff;
   --surface: #ffffff;
-  --surface-raised: #fbf8f2;
-  --border: #ece5d9;
-  --border-heavy: #ddd4c4;
-  --text: #2e2a24;
-  --text-secondary: #6b6258;
-  --text-muted: #a39a8d;
+  --surface-raised: #f2f2f2;
+  --border: #e5e5e5;
+  --border-heavy: #cfcfcf;
+  --text: #0f0f0f;
+  --text-secondary: #0f0f0f;
+  --text-muted: #606060;
 
   /* Accents */
-  --accent: #c8674f; /* terracotta */
-  --accent-hover: #b25742;
-  --accent-dim: rgba(200, 103, 79, 0.1);
-  --sage: #7c8b6f; /* quiet secondary */
-  --sage-dim: rgba(124, 139, 111, 0.14);
-  --success: #7c8b6f;
-  --highlight: #d99a5b;
+  --accent: #ff0033; /* YouTube-inspired red, without copying its wordmark */
+  --accent-hover: #cc0029;
+  --accent-dim: rgba(255, 0, 51, 0.09);
+  --sage: var(--text);
+  --sage-dim: var(--surface-raised);
+  --success: var(--text);
+  --highlight: var(--text-muted);
 
   /* Soft shadows give depth instead of heavy borders */
-  --shadow-sm: 0 1px 3px rgba(90, 80, 60, 0.06);
-  --shadow-md: 0 4px 16px rgba(90, 80, 60, 0.1);
-  --shadow-lg: 0 16px 48px rgba(50, 42, 32, 0.22);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.28);
 
   /* Rounding scale */
   --r-sm: 8px;
@@ -54,6 +54,26 @@
   --font-reading: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f0f0f;
+    --surface: #0f0f0f;
+    --surface-raised: #272727;
+    --border: #3f3f3f;
+    --border-heavy: #5a5a5a;
+    --text: #f1f1f1;
+    --text-secondary: #f1f1f1;
+    --text-muted: #aaaaaa;
+    --sage: var(--text);
+    --sage-dim: var(--surface-raised);
+    --success: var(--text);
+    --highlight: var(--text-muted);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.34);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.42);
+    --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.58);
+  }
 }
 
 /* ============================================================
@@ -145,9 +165,8 @@ body {
 }
 
 /* ============================================================
-   TAB NAVIGATION — pill tabs on the white header.
-   No background "track": the header is white and the content below is cream,
-   so the only thing in this strip is the muted labels + one terracotta pill.
+   TAB NAVIGATION — pill tabs on the browser-matched header.
+   No background "track": the only strong color is the active red pill.
    That keeps the menu visually separate from the content area below it.
    ============================================================ */
 .tabs {
@@ -183,11 +202,11 @@ body {
   background: var(--surface-raised);
 }
 
-/* Active pill — terracotta fill on the white header */
+/* Active pill — YouTube-red fill on the neutral header */
 .tab.active {
   color: #fff;
   background: var(--accent);
-  box-shadow: 0 2px 8px rgba(200, 103, 79, 0.3);
+  box-shadow: 0 2px 8px rgba(255, 0, 51, 0.28);
 }
 
 .tab.active:hover {
@@ -798,7 +817,7 @@ body {
   letter-spacing: 0.3px;
   cursor: pointer;
   transition: all 0.18s ease;
-  box-shadow: 0 6px 18px rgba(200, 103, 79, 0.4);
+  box-shadow: 0 6px 18px rgba(255, 0, 51, 0.34);
 }
 
 .follow-playback-btn:hover {
@@ -913,7 +932,7 @@ body {
   cursor: pointer;
   transition: all 0.18s ease;
   margin-top: 8px;
-  box-shadow: 0 4px 14px rgba(200, 103, 79, 0.3);
+  box-shadow: 0 4px 14px rgba(255, 0, 51, 0.28);
 }
 
 .error-btn:hover {
@@ -935,13 +954,13 @@ body {
   padding: 40px 24px;
 }
 
-/* A soft terracotta tile with a play glyph, matching the brand mark */
+/* A red tile with a play glyph, matching the local brand mark */
 .welcome-icon {
   width: 84px;
   height: 84px;
   border-radius: var(--r-xl);
-  background: linear-gradient(145deg, #d2735a, #bd5740);
-  box-shadow: 0 12px 30px rgba(200, 103, 79, 0.35);
+  background: linear-gradient(145deg, #ff1744, #e6002e);
+  box-shadow: 0 12px 30px rgba(255, 0, 51, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1052,7 +1071,7 @@ body {
   border: none;
   border-radius: var(--r-pill);
   cursor: pointer;
-  box-shadow: 0 6px 16px rgba(200, 103, 79, 0.4);
+  box-shadow: 0 6px 16px rgba(255, 0, 51, 0.34);
   transition: all 0.18s ease;
 }
 
@@ -1064,7 +1083,7 @@ body {
 .explain-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(46, 42, 36, 0.55);
+  background: rgba(0, 0, 0, 0.58);
   backdrop-filter: blur(3px);
   z-index: 9999;
   display: flex;
@@ -1169,6 +1188,194 @@ body {
 }
 
 /* ============================================================
+   CREATE / LEARNING PACK
+   ============================================================ */
+.create-hero {
+  padding: 2px 0 22px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 22px;
+}
+
+.create-eyebrow {
+  color: var(--accent);
+  font: 700 11px/1.4 var(--font-body);
+  letter-spacing: 0.9px;
+  margin-bottom: 7px;
+}
+
+.create-title {
+  color: var(--text);
+  font: 650 22px/1.25 var(--font-display);
+  letter-spacing: -0.45px;
+  margin-bottom: 8px;
+}
+
+.create-description {
+  color: var(--text-secondary);
+  font: 400 13.5px/1.65 var(--font-reading);
+  margin-bottom: 13px;
+}
+
+.learning-state-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  color: var(--text-muted);
+  font: 600 11.5px/1.4 var(--font-body);
+}
+
+.learning-state-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.learning-state-divider {
+  color: var(--border-heavy);
+}
+
+.learning-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.learning-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.learning-label {
+  color: var(--text);
+  font: 650 13.5px/1.4 var(--font-body);
+}
+
+.learning-hint {
+  color: var(--text-muted);
+  font: 400 11.5px/1.4 var(--font-body);
+}
+
+.learning-field textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 76px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text);
+  font: 400 13.5px/1.55 var(--font-reading);
+  outline: none;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.learning-field textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.learning-field textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.pack-contents {
+  padding: 14px 15px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-raised);
+}
+
+.pack-contents-title {
+  color: var(--text);
+  font: 650 12.5px/1.4 var(--font-body);
+  margin-bottom: 8px;
+}
+
+.pack-content-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  color: var(--text-secondary);
+  font: 400 12px/1.4 var(--font-body);
+}
+
+.pack-content-row span:last-child {
+  color: var(--accent);
+  font-weight: 650;
+  text-align: right;
+}
+
+.pack-content-row.pack-content-excluded span:last-child {
+  color: var(--text-muted);
+}
+
+.creator-workspace-send-btn {
+  width: 100%;
+  padding: 12px 18px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: #ffffff;
+  cursor: pointer;
+  font: 650 13.5px/1.4 var(--font-body);
+  box-shadow: 0 4px 14px rgba(255, 0, 51, 0.28);
+  transition:
+    background 0.18s ease,
+    transform 0.18s ease;
+}
+
+.creator-workspace-send-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+.creator-workspace-send-btn:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.creator-workspace-boundary {
+  color: var(--text-muted);
+  font: 400 11.5px/1.55 var(--font-body);
+  text-align: center;
+}
+
+.creator-workspace-status {
+  padding: 12px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-raised);
+  color: var(--text);
+  font: 500 12px/1.5 var(--font-body);
+}
+
+.creator-workspace-status--success {
+  border-left: 4px solid var(--accent);
+}
+
+.creator-workspace-status--error {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.creator-workspace-path {
+  display: block;
+  margin-top: 8px;
+  padding: 7px 8px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: 400 10.5px/1.45 var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+/* ============================================================
    NOTES TAB
    ============================================================ */
 
@@ -1202,7 +1409,7 @@ body {
 .notes-filter .enhance-btn.active {
   background: var(--accent);
   color: white;
-  box-shadow: 0 2px 6px rgba(200, 103, 79, 0.3);
+  box-shadow: 0 2px 6px rgba(255, 0, 51, 0.28);
 }
 
 .notes-filter .enhance-btn.active:hover:not(:disabled) {

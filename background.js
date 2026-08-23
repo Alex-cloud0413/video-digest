@@ -3,27 +3,30 @@
  *
  * This is the "brain" of the extension. It runs in the background and handles:
  * 1. Opening the side panel when the user clicks the extension icon
- * 2. Fetching YouTube transcripts via Supadata API
- * 3. Calling DeepSeek to analyze the transcript
+ * 2. Reading native YouTube subtitle tracks directly from the active player
+ * 3. Calling the loopback-only Codex bridge for language features
  * 4. Sending results back to the side panel
  *
  * Think of it like a backend server — it does the heavy lifting
  * so the UI (side panel) can stay fast and responsive.
  */
 
-// Import safe defaults and validation helpers. Secret keys live in
-// chrome.storage.local and are never part of the extension source.
+// Import safe defaults plus the generated local capability token. The token
+// protects a loopback service; it is not an external provider or API key.
 importScripts("settings.js");
+importScripts("bridge-config.js");
 
 const DEBUG = false;
-const AI_PROVIDER_IDLE_TIMEOUT_MS = 50_000;
-const AI_PROVIDER_HARD_TIMEOUT_MS = 120_000;
+const AI_PROVIDER_HARD_TIMEOUT_MS = 185_000;
 const AI_PROVIDER_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
+const CREATOR_WORKSPACE_HANDOFF_TIMEOUT_MS = 15_000;
+const CREATOR_WORKSPACE_HANDOFF_MAX_RESPONSE_BYTES = 64 * 1024;
 const debugLog = (...args) => {
   if (DEBUG) console.log(...args);
 };
 
-// Prevent the YouTube content script from reading API keys or cached data.
+// Prevent the YouTube content script from reading the local bridge capability
+// token or cached data.
 // Side panel, options, and service-worker contexts remain trusted.
 chrome.storage.local
   .setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" })
@@ -32,8 +35,7 @@ chrome.storage.local
   );
 
 async function getSettings() {
-  const stored = await chrome.storage.local.get(YTD_SETTINGS.STORAGE_KEY);
-  return YTD_SETTINGS.normalize(stored[YTD_SETTINGS.STORAGE_KEY]);
+  return YTD_SETTINGS.normalize();
 }
 
 const promptFileCache = new Map();
@@ -79,150 +81,143 @@ async function requestAiCompletion({
   responseFormat,
 }) {
   const settings = await getSettings();
-  if (!settings.aiApiKey) {
-    const error = new Error(
-      "DeepSeek API key not configured. Open YouTube Digest Settings.",
-    );
-    error.code = "NO_AI_KEY";
+  const bridge = globalThis.YTD_LOCAL_BRIDGE;
+  if (!bridge?.baseUrl || !bridge?.token) {
+    const error = new Error("Local Codex bridge configuration is missing.");
+    error.code = "BRIDGE_CONFIG_MISSING";
     throw error;
   }
   const body = {
-    model: settings.aiModel,
-    max_tokens: maxTokens,
     messages,
+    maxTokens,
+    responseFormat,
   };
   if (typeof temperature === "number") body.temperature = temperature;
-  if (responseFormat) {
-    body.response_format = responseFormat;
-  }
-  // Product features need bounded, predictable latency rather than reasoning traces.
-  body.thinking = { type: "disabled" };
 
   const controller = new AbortController();
-  let timeoutKind = "";
-  let idleTimeoutId;
-  let hardTimeoutId;
-  const abortForTimeout = (kind) => {
-    if (controller.signal.aborted) return;
-    timeoutKind = kind;
-    controller.abort();
-  };
-  const resetIdleTimeout = () => {
-    clearTimeout(idleTimeoutId);
-    idleTimeoutId = setTimeout(
-      () => abortForTimeout("idle"),
-      AI_PROVIDER_IDLE_TIMEOUT_MS,
-    );
-  };
-
-  hardTimeoutId = setTimeout(
-    () => abortForTimeout("hard"),
+  const hardTimeoutId = setTimeout(
+    () => controller.abort(),
     AI_PROVIDER_HARD_TIMEOUT_MS,
   );
-  resetIdleTimeout();
   try {
-    const response = await fetch(
-      YTD_SETTINGS.chatCompletionsUrl(),
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${settings.aiApiKey}`,
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
+    const response = await fetch(`${bridge.baseUrl}/v1/complete`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-YouTube-Digest-Token": bridge.token,
       },
-    );
-    // Receiving headers proves DeepSeek is still making progress. DeepSeek
-    // may then send blank-line body chunks while a non-streaming request queues.
-    resetIdleTimeout();
-
-    const data = await readBoundedAiResponse(response, resetIdleTimeout);
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    const responseText = await response.text();
+    if (new TextEncoder().encode(responseText).byteLength > AI_PROVIDER_MAX_RESPONSE_BYTES) {
+      const error = new Error("Local Codex response exceeded the 2 MiB limit.");
+      error.code = "AI_RESPONSE_TOO_LARGE";
+      throw error;
+    }
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      throw new Error("Local Codex bridge returned an invalid response.");
+    }
     if (!response.ok) {
-      const errorData = data && typeof data === "object" ? data : {};
-      const error = new Error(
-        errorData.error?.message ||
-          errorData.message ||
-          `DeepSeek error: ${response.status}`,
-      );
+      const error = new Error(data.error || `Local Codex error: ${response.status}`);
       error.status = response.status;
       throw error;
     }
-
-    const text = data.choices?.[0]?.message?.content;
+    const text = data.text;
     if (typeof text !== "string" || !text.trim()) {
-      const error = new Error("DeepSeek returned an empty response.");
+      const error = new Error("Local Codex returned an empty response.");
       error.code = "EMPTY_AI_RESPONSE";
       throw error;
     }
-
     return { text, settings };
   } catch (error) {
-    if (timeoutKind === "idle") {
+    if (error?.name === "AbortError") {
       const timeoutError = new Error(
-        "DeepSeek request was inactive for 50 seconds. Please Retry.",
-      );
-      timeoutError.code = "AI_IDLE_TIMEOUT";
-      throw timeoutError;
-    }
-    if (timeoutKind === "hard") {
-      const timeoutError = new Error(
-        "DeepSeek request exceeded the 120-second limit. Please Retry.",
+        "Local Codex request exceeded the 185-second limit. Please Retry.",
       );
       timeoutError.code = "AI_HARD_TIMEOUT";
       throw timeoutError;
     }
     throw error;
   } finally {
-    clearTimeout(idleTimeoutId);
     clearTimeout(hardTimeoutId);
   }
 }
 
-async function readBoundedAiResponse(response, onActivity) {
-  const reader = response.body?.getReader?.();
-  if (reader) {
-    const decoder = new TextDecoder();
-    let responseText = "";
-    let responseBytes = 0;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      // Every received chunk is activity, including DeepSeek's blank lines.
-      onActivity();
-      const byteLength = value?.byteLength ?? 0;
-      responseBytes += byteLength;
-      if (responseBytes > AI_PROVIDER_MAX_RESPONSE_BYTES) {
-        await reader.cancel?.().catch(() => {});
-        const error = new Error("DeepSeek response exceeded the 2 MiB limit.");
-        error.code = "AI_RESPONSE_TOO_LARGE";
-        throw error;
-      }
-      responseText += decoder.decode(value, { stream: true });
-    }
-    responseText += decoder.decode();
-    return JSON.parse(responseText.trimStart());
+async function checkLocalBridge() {
+  const bridge = globalThis.YTD_LOCAL_BRIDGE;
+  if (!bridge?.baseUrl) return false;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3_000);
+  try {
+    const response = await fetch(`${bridge.baseUrl}/health`, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!response.ok) return false;
+    const data = await response.json();
+    return data?.ok === true && data?.provider === "codex-local";
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function sendLearningPackToCreatorWorkspace(pack) {
+  const bridge = globalThis.YTD_LOCAL_BRIDGE;
+  if (!bridge?.baseUrl || !bridge?.token) {
+    return { success: false, error: "Local Codex bridge configuration is missing." };
   }
 
-  // Some fetch implementations do not expose a readable stream. Preserve a
-  // bounded body read for that case.
-  if (typeof response.text === "function") {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    CREATOR_WORKSPACE_HANDOFF_TIMEOUT_MS,
+  );
+  try {
+    const response = await fetch(`${bridge.baseUrl}/v1/handoff`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-YouTube-Digest-Token": bridge.token,
+      },
+      body: JSON.stringify(pack),
+      signal: controller.signal,
+    });
     const responseText = await response.text();
-    onActivity();
-    const byteLength = new TextEncoder().encode(responseText).byteLength;
-    if (byteLength > AI_PROVIDER_MAX_RESPONSE_BYTES) {
-      const error = new Error("DeepSeek response exceeded the 2 MiB limit.");
-      error.code = "AI_RESPONSE_TOO_LARGE";
-      throw error;
+    if (
+      new TextEncoder().encode(responseText).byteLength >
+      CREATOR_WORKSPACE_HANDOFF_MAX_RESPONSE_BYTES
+    ) {
+      throw new Error("Local Creator Workspace response was too large.");
     }
-    return JSON.parse(responseText.trimStart());
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      throw new Error("Local Creator Workspace returned an invalid response.");
+    }
+    if (!response.ok || data?.ok !== true) {
+      throw new Error(
+        data?.error || `Creator Workspace handoff failed: ${response.status}`,
+      );
+    }
+    return { success: true, receipt: data.receipt };
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error?.name === "AbortError"
+          ? "Creator Workspace handoff timed out after 15 seconds."
+          : error?.message || "Creator Workspace handoff failed.",
+    };
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  // Legacy/test fetch shims may expose only json(). The hard and idle timers
-  // still bound this fallback even though chunk-level activity is unavailable.
-  const data = await response.json();
-  onActivity();
-  return data;
 }
 
 // ============================================================
@@ -323,7 +318,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.action === "explainSelection") {
-    // Explain selected text using DeepSeek.
+    // Explain selected text using the local Codex bridge.
     handleExplainSelection(
       message.selectedText,
       message.transcriptContext,
@@ -355,6 +350,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === "sendLearningPack") {
+    sendLearningPackToCreatorWorkspace(message.pack)
+      .then(sendResponse)
+      .catch((err) => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
   if (message.action === "deleteNote") {
     // Delete a specific note
     handleDeleteNote(message.noteId)
@@ -370,7 +372,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // Translation: send content to DeepSeek.
+  // Translation: send content to the loopback-only Codex bridge.
   if (message.action === "translateContent") {
     handleTranslateContent(
       message.content,
@@ -384,11 +386,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.action === "checkConfig") {
-    getSettings()
-      .then((settings) =>
+    checkLocalBridge()
+      .then((bridgeOnline) =>
         sendResponse({
-          hasSupadataKey: !!settings.supadataApiKey,
-          hasAiKey: !!settings.aiApiKey,
+          transcriptReady: true,
+          aiReady: bridgeOnline,
+          bridgeOnline,
+          hasSupadataKey: true,
+          hasAiKey: bridgeOnline,
         }),
       )
       .catch((error) => sendResponse({ error: error.message }));
@@ -574,233 +579,420 @@ async function getPlayerVideoDetails(tabId) {
 }
 
 // ============================================================
-// TRANSCRIPT FETCHING VIA SUPADATA API
+// DIRECT YOUTUBE SUBTITLE EXTRACTION
 // ============================================================
 
+async function findYouTubeTabForVideo(videoId) {
+  const expected = String(videoId || "");
+  const candidates = [];
+  const addMatches = (tabs) => {
+    for (const tab of tabs || []) {
+      try {
+        const url = new URL(tab.url || "");
+        if (
+          url.hostname === "www.youtube.com" &&
+          url.pathname === "/watch" &&
+          url.searchParams.get("v") === expected &&
+          !candidates.some((candidate) => candidate.id === tab.id)
+        ) {
+          candidates.push(tab);
+        }
+      } catch {
+        // Ignore tabs that changed or closed while being inspected.
+      }
+    }
+  };
+
+  addMatches(
+    await chrome.tabs.query({ active: true, lastFocusedWindow: true }),
+  );
+  if (!candidates.length) {
+    addMatches(await chrome.tabs.query({ url: "https://www.youtube.com/watch*" }));
+  }
+  return candidates[0] || null;
+}
+
+async function getCaptionTracksFromPlayer(tabId, videoId) {
+  const results = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    args: [videoId],
+    func: (expectedVideoId) => {
+      try {
+        const player = document.getElementById("movie_player");
+        const response =
+          player?.getPlayerResponse?.() || globalThis.ytInitialPlayerResponse;
+        if (response?.videoDetails?.videoId !== expectedVideoId) return [];
+        const tracks =
+          response?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+        if (!Array.isArray(tracks)) return [];
+        return tracks.slice(0, 100).map((track) => ({
+          baseUrl: typeof track.baseUrl === "string" ? track.baseUrl : "",
+          languageCode:
+            typeof track.languageCode === "string" ? track.languageCode : "",
+          kind: typeof track.kind === "string" ? track.kind : "",
+          vssId: typeof track.vssId === "string" ? track.vssId : "",
+          name:
+            track.name?.simpleText ||
+            (Array.isArray(track.name?.runs)
+              ? track.name.runs.map((run) => run.text || "").join("")
+              : ""),
+        }));
+      } catch {
+        return [];
+      }
+    },
+  });
+  return Array.isArray(results?.[0]?.result) ? results[0].result : [];
+}
+
 /**
- * Fetches the transcript for a YouTube video using Supadata API.
+ * Fetch a player-provided subtitle URL inside YouTube's MAIN world.
  *
- * Supadata is a specialized service that reliably extracts transcripts
- * from YouTube videos. It handles all the complexity of parsing YouTube's
- * internal data structures, dealing with different caption formats, etc.
- *
- * API Docs: https://docs.supadata.ai
- *
- * @param {string} videoId - The YouTube video ID (e.g., "dQw4w9WgXcQ")
- * @returns {Object} - { success, transcript, transcriptText, language } or { success: false, error }
+ * Recent YouTube subtitle URLs can depend on the page's signed-in cookies and
+ * player request context. A service-worker fetch has a different origin and
+ * can therefore receive an empty 200 response even while captions are visibly
+ * playing. Keeping this request in the watch page preserves that context.
  */
+async function fetchCaptionPayloadInPage(tabId, baseUrl) {
+  const results = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    args: [baseUrl],
+    func: async (sourceUrl) => {
+      const MAX_PAYLOAD_CHARACTERS = 2 * 1024 * 1024;
+      try {
+        const source = new URL(sourceUrl);
+        const allowedHost =
+          source.protocol === "https:" &&
+          (source.hostname === "www.youtube.com" ||
+            source.hostname.endsWith(".youtube.com") ||
+            source.hostname.endsWith(".googlevideo.com"));
+        if (!allowedHost) {
+          return { ok: false, status: 0, error: "Unsupported subtitle URL" };
+        }
+
+        const json3 = new URL(source);
+        json3.searchParams.set("fmt", "json3");
+        const candidates = [...new Set([source.toString(), json3.toString()])];
+        let lastStatus = 0;
+        for (const candidate of candidates) {
+          const response = await fetch(candidate, {
+            method: "GET",
+            credentials: "include",
+            cache: "no-store",
+          });
+          lastStatus = response.status;
+          const payload = await response.text();
+          if (payload.length > MAX_PAYLOAD_CHARACTERS) {
+            return {
+              ok: false,
+              status: response.status,
+              error: "Subtitle payload exceeded the 2 MiB limit",
+            };
+          }
+          if (response.ok && payload.trim()) {
+            return { ok: true, status: response.status, payload };
+          }
+        }
+        return {
+          ok: false,
+          status: lastStatus,
+          error: "YouTube returned an empty subtitle response",
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          status: 0,
+          error: error?.message || "Subtitle request failed",
+        };
+      }
+    },
+  });
+  return results?.[0]?.result || {
+    ok: false,
+    status: 0,
+    error: "YouTube page did not return subtitle data",
+  };
+}
+
+/**
+ * Last-resort fallback: ask YouTube to open its own transcript panel and read
+ * the timestamped rows that YouTube renders. This uses only the active watch
+ * page and closes the panel again when this function opened it.
+ */
+async function getTranscriptRowsFromYouTubePanel(tabId, videoId) {
+  const results = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    args: [videoId],
+    func: async (expectedVideoId) => {
+      const sleep = (milliseconds) =>
+        new Promise((resolve) => setTimeout(resolve, milliseconds));
+      const parseTimestamp = (value) => {
+        const parts = String(value || "")
+          .trim()
+          .split(":")
+          .map((part) => Number(part));
+        if (!parts.length || parts.some((part) => !Number.isFinite(part))) {
+          return null;
+        }
+        return parts.reduce((total, part) => total * 60 + part, 0);
+      };
+      const collectRows = () =>
+        [...document.querySelectorAll("ytd-transcript-segment-renderer")]
+          .map((segment) => {
+            const timestamp =
+              segment.querySelector(".segment-timestamp")?.textContent || "";
+            const start = parseTimestamp(timestamp);
+            const text =
+              segment.querySelector(".segment-text")?.textContent?.replace(/\s+/g, " ").trim() ||
+              "";
+            return start === null || !text ? null : { start, text };
+          })
+          .filter(Boolean)
+          .slice(0, 50_000);
+
+      try {
+        if (new URL(location.href).searchParams.get("v") !== expectedVideoId) {
+          return { ok: false, rows: [], error: "Active video changed" };
+        }
+        let rows = collectRows();
+        if (rows.length) return { ok: true, rows };
+
+        const expand =
+          document.querySelector("ytd-watch-metadata #description #expand") ||
+          document.querySelector("ytd-text-inline-expander #expand");
+        if (expand instanceof HTMLElement) {
+          expand.click();
+          await sleep(300);
+        }
+
+        const panelBefore = document.querySelector(
+          'ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-searchable-transcript"]',
+        );
+        const panelWasVisible =
+          panelBefore?.getAttribute("visibility") === "ENGAGEMENT_PANEL_VISIBILITY_EXPANDED";
+        const transcriptButton =
+          document.querySelector(
+            "ytd-video-description-transcript-section-renderer button",
+          ) ||
+          document.querySelector(
+            "ytd-video-description-transcript-section-renderer tp-yt-paper-button",
+          );
+        if (transcriptButton instanceof HTMLElement) transcriptButton.click();
+
+        for (let attempt = 0; attempt < 50; attempt += 1) {
+          await sleep(100);
+          rows = collectRows();
+          if (rows.length) break;
+        }
+
+        if (rows.length && !panelWasVisible) {
+          const panel = document.querySelector(
+            'ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-searchable-transcript"]',
+          );
+          const closeButton =
+            panel?.querySelector("#visibility-button button") ||
+            panel?.querySelector('button[aria-label*="Close" i]');
+          if (closeButton instanceof HTMLElement) closeButton.click();
+        }
+        return rows.length
+          ? { ok: true, rows }
+          : { ok: false, rows: [], error: "YouTube transcript panel was unavailable" };
+      } catch (error) {
+        return {
+          ok: false,
+          rows: [],
+          error: error?.message || "Could not read YouTube transcript panel",
+        };
+      }
+    },
+  });
+  return results?.[0]?.result || {
+    ok: false,
+    rows: [],
+    error: "YouTube transcript panel returned no data",
+  };
+}
+
+function selectCaptionTrack(tracks) {
+  const scored = (Array.isArray(tracks) ? tracks : [])
+    .filter((track) => typeof track?.baseUrl === "string" && track.baseUrl)
+    .map((track, index) => {
+      const language = String(track.languageCode || "").toLowerCase();
+      const englishScore = language === "en" ? 100 : language.startsWith("en-") ? 90 : 0;
+      const humanScore = track.kind === "asr" ? 0 : 10;
+      return { track, index, score: englishScore + humanScore };
+    })
+    .sort((left, right) => right.score - left.score || left.index - right.index);
+  return scored[0]?.track || null;
+}
+
+function cleanCaptionText(text) {
+  return String(text || "")
+    .replace(/>> ?/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function decodeXmlEntities(text) {
+  return String(text || "")
+    .replace(/&#(\d+);/g, (_, value) => String.fromCodePoint(Number(value)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, value) =>
+      String.fromCodePoint(Number.parseInt(value, 16)),
+    )
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
+function parseYouTubeJson3(data, language) {
+  const transcript = [];
+  for (const event of Array.isArray(data?.events) ? data.events : []) {
+    if (!Array.isArray(event?.segs)) continue;
+    const text = cleanCaptionText(
+      event.segs.map((segment) => segment?.utf8 || "").join(""),
+    );
+    if (!text) continue;
+    transcript.push({
+      text,
+      start: Math.max(0, Number(event.tStartMs) || 0) / 1000,
+      duration: Math.max(0, Number(event.dDurationMs) || 0) / 1000,
+      language: language || null,
+    });
+  }
+  return transcript;
+}
+
+function parseXmlAttributes(source) {
+  const attributes = {};
+  for (const match of String(source || "").matchAll(/([A-Za-z]+)="([^"]*)"/g)) {
+    attributes[match[1]] = match[2];
+  }
+  return attributes;
+}
+
+function parseYouTubeXml(payload, language) {
+  const transcript = [];
+  const legacy = /<text\b([^>]*)>([\s\S]*?)<\/text>/g;
+  for (const match of payload.matchAll(legacy)) {
+    const attributes = parseXmlAttributes(match[1]);
+    const text = cleanCaptionText(decodeXmlEntities(match[2].replace(/<[^>]+>/g, "")));
+    if (!text) continue;
+    transcript.push({
+      text,
+      start: Math.max(0, Number(attributes.start) || 0),
+      duration: Math.max(0, Number(attributes.dur) || 0),
+      language: language || null,
+    });
+  }
+  if (transcript.length) return transcript;
+
+  const srv3 = /<p\b([^>]*)>([\s\S]*?)<\/p>/g;
+  for (const match of payload.matchAll(srv3)) {
+    const attributes = parseXmlAttributes(match[1]);
+    const text = cleanCaptionText(decodeXmlEntities(match[2].replace(/<[^>]+>/g, "")));
+    if (!text) continue;
+    transcript.push({
+      text,
+      start: Math.max(0, Number(attributes.t) || 0) / 1000,
+      duration: Math.max(0, Number(attributes.d) || 0) / 1000,
+      language: language || null,
+    });
+  }
+  return transcript;
+}
+
+function parseYouTubeCaptionPayload(payload, language) {
+  const text = String(payload || "").trim();
+  if (!text) return [];
+  if (text.startsWith("{")) {
+    return parseYouTubeJson3(JSON.parse(text), language);
+  }
+  return parseYouTubeXml(text, language);
+}
+
+function buildTranscriptResult(transcript, language) {
+  const safeTranscript = (Array.isArray(transcript) ? transcript : [])
+    .filter((item) => item?.text && Number.isFinite(Number(item.start)))
+    .slice(0, 50_000)
+    .sort((left, right) => Number(left.start) - Number(right.start));
+  const transcriptText = safeTranscript.map((item) => item.text).join(" ");
+  const transcriptTextTimestamped = safeTranscript
+    .map((item) => {
+      const seconds = Math.max(0, Math.floor(Number(item.start) || 0));
+      const minutes = Math.floor(seconds / 60);
+      const remainder = seconds % 60;
+      return `[${minutes}:${String(remainder).padStart(2, "0")}] ${item.text}`;
+    })
+    .join("\n");
+  return {
+    success: true,
+    transcript: safeTranscript,
+    transcriptText,
+    transcriptTextTimestamped,
+    language: language || null,
+  };
+}
+
 async function handleFetchTranscript(videoId) {
   try {
-    const settings = await getSettings();
-    if (!settings.supadataApiKey) {
+    YTD_SETTINGS.canonicalYouTubeUrl(videoId);
+    const tab = await findYouTubeTabForVideo(videoId);
+    if (!tab?.id) {
       return {
         success: false,
-        error: "NO_SUPADATA_KEY",
-        message: "Supadata API key not configured. Open YouTube Digest Settings.",
+        error: "VIDEO_TAB_NOT_FOUND",
+        message: "Open this video in a standard YouTube watch tab and try again.",
       };
     }
-
-    // Share only the canonical watch URL. This strips playlist, referral,
-    // timestamp, and other browsing parameters from the active tab URL.
-    const canonicalVideoUrl = YTD_SETTINGS.canonicalYouTubeUrl(videoId);
-    // Using the universal transcript endpoint with text=false to get timestamped chunks
-    const apiUrl = new URL("https://api.supadata.ai/v1/transcript");
-    apiUrl.searchParams.set("url", canonicalVideoUrl);
-    apiUrl.searchParams.set("text", "false"); // Get timestamped chunks, not plain text
-    apiUrl.searchParams.set("lang", "en"); // Prefer English
-    // Caption-only product scope: never fall back to paid AI transcription.
-    apiUrl.searchParams.set("mode", "native");
-
-    // Make the API request
-    const response = await fetch(apiUrl.toString(), {
-      method: "GET",
-      headers: {
-        "x-api-key": settings.supadataApiKey,
-      },
-    });
-
-    // Handle async jobs (for videos > 20 minutes, Supadata returns a job ID)
-    if (response.status === 202) {
-      const jobData = await response.json();
-      // Poll for the result
-      return await pollTranscriptJob(jobData.jobId, settings.supadataApiKey);
-    }
-
-    if (response.status === 206) {
+    const tracks = await getCaptionTracksFromPlayer(tab.id, videoId);
+    const track = selectCaptionTrack(tracks);
+    if (!track) {
       return {
         success: false,
         error: "NO_TRANSCRIPT",
-        message: "No native subtitle track is available for this video.",
+        message: "This video does not expose an available subtitle track.",
       };
     }
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      if (response.status === 401) {
-        return {
-          success: false,
-          error: "INVALID_SUPADATA_KEY",
-          message: "Your Supadata API key is invalid. Open YouTube Digest Settings.",
-        };
-      }
-      if (response.status === 404) {
-        return {
-          success: false,
-          error: "NO_TRANSCRIPT",
-          message: "No subtitles found for this video.",
-        };
-      }
-      if (response.status === 429) {
-        return {
-          success: false,
-          error: "RATE_LIMITED",
-          message:
-            "Supadata rate limit reached. Please wait a minute and try again.",
-        };
-      }
-      throw new Error(
-        errorData.message || `Supadata API error: ${response.status}`,
-      );
-    }
-
-    const data = await response.json();
-
-    // Parse the response into our internal format
-    // Supadata returns: { content: [{ text, offset, duration, lang }], lang, availableLangs }
-    const transcript = [];
-    let transcriptTextPlain = ""; // Plain text for display/export
-    let transcriptTextTimestamped = ""; // Timestamped text for AI analysis
-
-    if (data.content && Array.isArray(data.content)) {
-      for (const chunk of data.content) {
-        if (chunk.text) {
-          // Clean up caption artifacts:
-          // ">>" = speaker change marker from YouTube auto-captions
-          const cleanText = chunk.text.replace(/>> ?/g, "").trim();
-          if (!cleanText) continue; // Skip if nothing left after cleanup
-
-          // offset is in milliseconds, convert to seconds
-          const startSeconds = Math.floor((chunk.offset || 0) / 1000);
-          const minutes = Math.floor(startSeconds / 60);
-          const seconds = startSeconds % 60;
-          const timestamp = `${minutes}:${String(seconds).padStart(2, "0")}`;
-
-          transcript.push({
-            text: cleanText,
-            start: startSeconds,
-            duration: Math.floor((chunk.duration || 0) / 1000),
-            language: chunk.lang || data.lang || null,
-          });
-
-          // Plain text without timestamps (for display/export)
-          transcriptTextPlain += cleanText + " ";
-
-          // Timestamped text for DeepSeek (format: [MM:SS] text)
-          // This allows the model to reference actual transcript positions.
-          transcriptTextTimestamped += `[${timestamp}] ${cleanText}\n`;
-        }
+    const pagePayload = await fetchCaptionPayloadInPage(tab.id, track.baseUrl);
+    let transcript = pagePayload.ok
+      ? parseYouTubeCaptionPayload(pagePayload.payload, track.languageCode)
+      : [];
+    if (!transcript.length) {
+      const panelResult = await getTranscriptRowsFromYouTubePanel(tab.id, videoId);
+      if (panelResult.ok) {
+        transcript = panelResult.rows.map((row, index, rows) => ({
+          text: cleanCaptionText(row.text),
+          start: Math.max(0, Number(row.start) || 0),
+          duration: Math.max(
+            0,
+            Number(rows[index + 1]?.start) - Number(row.start) || 0,
+          ),
+          language: track.languageCode || null,
+        }));
       }
     }
-
-    if (transcript.length === 0) {
+    if (!transcript.length) {
       return {
         success: false,
         error: "EMPTY_TRANSCRIPT",
-        message: "Supadata returned an empty transcript for this video.",
+        message:
+          "YouTube did not expose transcript data to the page. Confirm captions are available, reload the video tab, and try again.",
       };
     }
-
-    return {
-      success: true,
-      transcript: transcript,
-      transcriptText: transcriptTextPlain.trim(), // For display
-      transcriptTextTimestamped: transcriptTextTimestamped.trim(), // For AI
-      language: typeof data.lang === "string" ? data.lang : null,
-    };
+    return buildTranscriptResult(transcript, track.languageCode);
   } catch (error) {
     console.error("Transcript fetch error:", error);
     return {
       success: false,
       error: error.message || "Failed to fetch transcript",
+      message: error.message || "Failed to fetch transcript",
     };
   }
-}
-
-/**
- * Polls for transcript job completion (for long videos).
- * Supadata processes videos > 20 minutes asynchronously.
- *
- * @param {string} jobId - The job ID returned by the initial request
- * @returns {Object} - Same format as handleFetchTranscript
- */
-async function pollTranscriptJob(jobId, supadataApiKey) {
-  const maxAttempts = 60; // Max 60 seconds of polling
-  const pollInterval = 1000; // Poll every 1 second
-
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    // Wait before polling
-    await new Promise((resolve) => setTimeout(resolve, pollInterval));
-
-    const response = await fetch(
-      `https://api.supadata.ai/v1/transcript/${encodeURIComponent(jobId)}`,
-      {
-        headers: { "x-api-key": supadataApiKey },
-      },
-    );
-
-    if (!response.ok) {
-      throw new Error(`Job polling failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    if (data.status === "completed") {
-      // Parse the completed transcript
-      const transcript = [];
-      let transcriptTextPlain = "";
-      let transcriptTextTimestamped = "";
-
-      if (data.content && Array.isArray(data.content)) {
-        for (const chunk of data.content) {
-          if (chunk.text) {
-            // Clean up caption artifacts (">>" = speaker change marker)
-            const cleanText = chunk.text.replace(/>> ?/g, "").trim();
-            if (!cleanText) continue;
-
-            const startSeconds = Math.floor((chunk.offset || 0) / 1000);
-            const minutes = Math.floor(startSeconds / 60);
-            const seconds = startSeconds % 60;
-            const timestamp = `${minutes}:${String(seconds).padStart(2, "0")}`;
-
-            transcript.push({
-              text: cleanText,
-              start: startSeconds,
-              duration: Math.floor((chunk.duration || 0) / 1000),
-              language: chunk.lang || data.lang || null,
-            });
-            transcriptTextPlain += cleanText + " ";
-            transcriptTextTimestamped += `[${timestamp}] ${chunk.text}\n`;
-          }
-        }
-      }
-
-      return {
-        success: true,
-        transcript: transcript,
-        transcriptText: transcriptTextPlain.trim(),
-        transcriptTextTimestamped: transcriptTextTimestamped.trim(),
-        language: typeof data.lang === "string" ? data.lang : null,
-      };
-    }
-
-    if (data.status === "failed") {
-      throw new Error("Transcript processing failed");
-    }
-
-    // Status is 'queued' or 'active' — keep polling
-  }
-
-  throw new Error("Transcript processing timed out");
 }
 
 // ============================================================
@@ -844,11 +1036,11 @@ function parseLooseJson(text) {
 }
 
 // ============================================================
-// DEEPSEEK ANALYSIS
+// CODEX-LOCAL ANALYSIS
 // ============================================================
 
 /**
- * Sends the transcript to DeepSeek for analysis.
+ * Sends the transcript to the loopback-only Codex bridge for analysis.
  *
  * The prompt asks the model to produce chapters covering the whole video
  * and 3-5 key quotes with timestamps.
@@ -867,13 +1059,6 @@ async function handleAnalyzeTranscript(
 ) {
   try {
     const settings = await getSettings();
-    if (!settings.aiApiKey) {
-      return {
-        success: false,
-        error: "NO_AI_KEY",
-        message: "DeepSeek API key not configured. Open YouTube Digest Settings.",
-      };
-    }
 
     // Convert duration to MM:SS format for context
     // The transcript text is already prefixed with [M:SS] markers. Its LAST
@@ -951,15 +1136,15 @@ async function handleAnalyzeTranscript(
     if (error.status === 401) {
       return {
         success: false,
-        error: "INVALID_AI_KEY",
-        message: "DeepSeek rejected the API key.",
+        error: "BRIDGE_AUTH_FAILED",
+        message: "The local Codex bridge rejected this extension.",
       };
     }
     if (error.status === 429) {
       return {
         success: false,
         error: "RATE_LIMITED",
-        message: "DeepSeek rate-limited this request. Try again shortly.",
+        message: "The local Codex queue is full. Try again shortly.",
       };
     }
     return {
@@ -973,7 +1158,7 @@ async function handleAnalyzeTranscript(
  * Validates all timestamps in the analysis and fixes any that exceed video duration.
  * This is a safety net to prevent hallucinated timestamps from reaching the UI.
  *
- * @param {Object} analysis - The parsed analysis from DeepSeek
+ * @param {Object} analysis - The parsed analysis from Codex
  * @param {number} maxSeconds - Maximum valid timestamp in seconds
  * @returns {Object} - Analysis with validated timestamps
  */
@@ -1067,7 +1252,7 @@ async function handleGetVideoInfo(tabId) {
 // ============================================================
 
 /**
- * Explains selected text using DeepSeek.
+ * Explains selected text using the local Codex bridge.
  * Provides context, definitions, and clarification for complex terms.
  *
  * @param {string} selectedText - The text the user selected
@@ -1096,7 +1281,7 @@ async function handleSaveNote(
     // First, try to get the transcript from the digest cache. The side panel
     // saves digests to chrome.storage.LOCAL — this used to look in
     // storage.session (the wrong store), so it missed every time and
-    // refetched the transcript from Supadata on every saved note.
+    // refetched the transcript on every saved note.
     let transcript = null;
     try {
       const cached = await chrome.storage.local.get(`digest_${videoId}`);
@@ -1183,7 +1368,7 @@ async function handleSaveNote(
       }
     }
 
-    // Clean up the text with DeepSeek.
+    // Clean up the text with the local Codex bridge.
     const cleanedText = await cleanupNoteText(
       matchedLine.text,
       beforeLine,
@@ -1232,7 +1417,7 @@ async function handleSaveNote(
 }
 
 /**
- * Cleans up transcript lines using DeepSeek.
+ * Cleans up transcript lines using the local Codex bridge.
  * Takes the target line plus buffer sentences (1 before, 1 after).
  * Uses JSON output to prevent any preambles from appearing.
  */
@@ -1243,11 +1428,6 @@ async function cleanupNoteText(
   fullContext,
   videoTitle,
 ) {
-  const settings = await getSettings();
-  if (!settings.aiApiKey) {
-    return [beforeText, targetText, afterText].filter(Boolean).join(" ");
-  }
-
   try {
     debugLog("[YouTube Digest] Requesting note cleanup");
     const variables = {
@@ -1366,15 +1546,6 @@ async function handleExplainSelection(
   videoTitle,
 ) {
   try {
-    const settings = await getSettings();
-    if (!settings.aiApiKey) {
-      return {
-        success: false,
-        error: "NO_AI_KEY",
-        message: "DeepSeek API key not configured.",
-      };
-    }
-
     const variables = {
       videoTitle: videoTitle || "Unknown",
       selectedText,
@@ -1442,8 +1613,8 @@ async function getTranslationBaseRules(targetLanguage) {
 
 function validateTranscriptBatchRequest(content) {
   const segments = content?.segments;
-  if (!Array.isArray(segments) || segments.length < 1 || segments.length > 4) {
-    throw new Error("Transcript translation requires 1 to 4 segments");
+  if (!Array.isArray(segments) || segments.length < 1 || segments.length > 12) {
+    throw new Error("Transcript translation requires 1 to 12 segments");
   }
 
   const seenIds = new Set();
@@ -1510,7 +1681,7 @@ function normalizeTranslatedSegmentBatch(parsed, sourceSegments) {
 }
 
 /**
- * Translates content using DeepSeek.
+ * Translates content using the local Codex bridge.
  * @param {Object} content - JSON object containing semantic transcript segments
  * @param {string} contentType - Must be 'transcriptBatch'
  * @param {string} targetLanguage - 'zh' for Simplified Chinese
@@ -1537,11 +1708,6 @@ async function handleTranslateContent(
       };
     }
 
-    const settings = await getSettings();
-    if (!settings.aiApiKey) {
-      return { success: false, error: "DeepSeek API key not configured" };
-    }
-
     const sourceSegments = validateTranscriptBatchRequest(content);
     const langName = "Simplified Chinese";
     const baseRules = await getTranslationBaseRules(targetLanguage);
@@ -1566,7 +1732,7 @@ async function handleTranslateContent(
       translationOptions,
     );
 
-    // DeepSeek JSON mode can rarely return an empty content string. The prompt
+    // A local model response can rarely be empty. The prompt
     // already requires JSON, so retry once without response_format.
     if (!result.success && result.code === "EMPTY_AI_RESPONSE") {
       result = await callAiTranslation(systemPrompt, userContent, {
@@ -1592,7 +1758,7 @@ async function handleTranslateContent(
 }
 
 /**
- * Makes a single DeepSeek call for translation.
+ * Makes a single Codex-local call for translation.
  * Uses temperature 0.3 for consistent, predictable translations.
  *
  * @param {string} systemPrompt - The system-level instructions
@@ -1635,4 +1801,16 @@ globalThis.__YTD_TRANSLATION_TESTING__ = {
   validateTranscriptBatchRequest,
   normalizeTranslatedSegmentBatch,
   handleTranslateContent,
+};
+
+globalThis.__YTD_DIRECT_TRANSCRIPT_TESTING__ = {
+  buildTranscriptResult,
+  cleanCaptionText,
+  decodeXmlEntities,
+  fetchCaptionPayloadInPage,
+  getTranscriptRowsFromYouTubePanel,
+  parseYouTubeCaptionPayload,
+  parseYouTubeJson3,
+  parseYouTubeXml,
+  selectCaptionTrack,
 };

@@ -28,6 +28,7 @@ let currentVideoDuration = 0;
 let isAnalysisLoading = false; // Track if analysis is in progress
 let youtubeTabId = null; // Store the YouTube tab ID for reliable messaging
 let errorAction = null;
+let learningDraftSaveTimer = null;
 
 // --- Translation state ---
 // The public transcript control intentionally supports only the original
@@ -38,7 +39,7 @@ let translationWorkCount = 0;
 let transcriptScrollObserver = null;
 // Stable keys include the video, source mode, language, and semantic segment ID.
 let transcriptParagraphCache = new Map();
-const TRANSLATION_MESSAGE_TIMEOUT_MS = 130_000;
+const TRANSLATION_MESSAGE_TIMEOUT_MS = 190_000;
 
 /**
  * Prevent a stopped service worker or dead message channel from leaving the
@@ -60,7 +61,7 @@ function sendTranslationMessage(message) {
       finish(
         reject,
         new Error(
-          "Translation request timed out after 130 seconds. Please Retry.",
+          "Translation request timed out after 190 seconds. Please Retry.",
         ),
       );
     }, TRANSLATION_MESSAGE_TIMEOUT_MS);
@@ -139,7 +140,7 @@ function splitOversizedThought(text, maxChars) {
 /**
  * Reconstructs complete sentences across raw caption boundaries. Each segment
  * keeps the timestamp of the first caption that contributed text. Character
- * and time limits prevent a malformed Supadata entry from becoming one giant
+ * and time limits prevent a malformed subtitle entry from becoming one giant
  * row while punctuation remains the preferred boundary.
  */
 function groupTranscriptEntries(entries, limits = TRANSCRIPT_SEGMENT_LIMITS) {
@@ -237,7 +238,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     action: "checkConfig",
   });
 
-  if (!configStatus.hasSupadataKey || !configStatus.hasAiKey) {
+  if (!configStatus.transcriptReady) {
     showConfigError(configStatus);
     return;
   }
@@ -408,6 +409,13 @@ function setupEventListeners() {
     setNotesFilter(true);
     loadNotes(null); // Load all notes
   });
+
+  document
+    .getElementById("learningPackForm")
+    ?.addEventListener("submit", sendLearningPackToCreatorWorkspace);
+  document.querySelectorAll(".learning-field textarea").forEach((field) => {
+    field.addEventListener("input", scheduleLearningPackDraftSave);
+  });
 }
 
 function setNotesFilter(showAll) {
@@ -553,6 +561,10 @@ async function startDigest(videoId, videoUrl) {
     currentTranscriptTimestamped = cached.transcriptTimestamped;
     currentTranscriptLanguage = cached.transcriptLanguage || null;
     isAnalysisLoading = false;
+    document
+      .getElementById("creatorWorkspaceHandoffStatus")
+      ?.setAttribute("hidden", "");
+    loadLearningPackDraft(videoId);
 
     // Restore semantic-segment translations from persistent storage.
     if (cached.paragraphCache) {
@@ -597,6 +609,10 @@ async function startDigest(videoId, videoUrl) {
   currentTranscriptTimestamped = null;
   currentTranscriptLanguage = null;
   isAnalysisLoading = false;
+  document
+    .getElementById("creatorWorkspaceHandoffStatus")
+    ?.setAttribute("hidden", "");
+  loadLearningPackDraft(videoId);
 
   if (currentVideoTitle || currentChannelName) {
     const videoInfo = document.getElementById("videoInfo");
@@ -614,13 +630,6 @@ async function startDigest(videoId, videoUrl) {
   });
 
   if (!transcriptResult.success) {
-    if (transcriptResult.error === "NO_SUPADATA_KEY") {
-      showError(
-        "API key missing",
-        "Add your Supadata API key in YouTube Digest Settings.",
-      );
-      return;
-    }
     showError(
       "No transcript found",
       transcriptResult.message || transcriptResult.error,
@@ -940,14 +949,10 @@ function showError(title, message) {
 }
 
 function showConfigError(configStatus) {
-  const missingKeys = [];
-  if (!configStatus.hasSupadataKey) missingKeys.push("Supadata");
-  if (!configStatus.hasAiKey) missingKeys.push("AI provider");
-
   showState("error");
-  document.getElementById("errorTitle").textContent = "API Keys Missing";
+  document.getElementById("errorTitle").textContent = "Local setup incomplete";
   document.getElementById("errorMessage").textContent =
-    `Add your ${missingKeys.join(" and ")} API key${missingKeys.length === 1 ? "" : "s"} in YouTube Digest Settings.`;
+    configStatus?.message || "Open Settings to check the local installation.";
   document.getElementById("errorBtn").textContent = "Open Settings";
   errorAction = () => chrome.runtime.sendMessage({ action: "openOptions" });
 }
@@ -975,6 +980,169 @@ function switchTab(tabName) {
   // Lazy-load LLM analysis when user switches to Overview tab
   if (tabName === "overview" && !currentAnalysis && !isAnalysisLoading) {
     triggerAnalysis();
+  }
+
+  if (tabName === "create") {
+    loadLearningPackDraft(currentVideoId);
+  }
+}
+
+// ============================================================
+// CREATE / CREATOR WORKSPACE HANDOFF
+// ============================================================
+
+const LEARNING_REFLECTION_FIELDS = Object.freeze({
+  myTake: "createMyTake",
+  agreeDisagree: "createAgreeDisagree",
+  connections: "createConnections",
+  coreClaim: "createCoreClaim",
+});
+
+function readLearningReflection() {
+  return Object.fromEntries(
+    Object.entries(LEARNING_REFLECTION_FIELDS).map(([key, id]) => [
+      key,
+      document.getElementById(id)?.value || "",
+    ]),
+  );
+}
+
+function writeLearningReflection(reflection = {}) {
+  for (const [key, id] of Object.entries(LEARNING_REFLECTION_FIELDS)) {
+    const field = document.getElementById(id);
+    if (field) field.value = typeof reflection[key] === "string" ? reflection[key] : "";
+  }
+}
+
+function scheduleLearningPackDraftSave() {
+  clearTimeout(learningDraftSaveTimer);
+  learningDraftSaveTimer = setTimeout(saveLearningPackDraft, 350);
+}
+
+async function saveLearningPackDraft() {
+  if (!currentVideoId || !globalThis.YTD_LEARNING_PACK) return;
+  try {
+    const key = YTD_LEARNING_PACK.draftStorageKey(currentVideoId);
+    await chrome.storage.local.set({
+      [key]: {
+        reflection: readLearningReflection(),
+        updatedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error("[YouTube Digest] Could not save Learning Pack draft:", error);
+  }
+}
+
+async function loadLearningPackDraft(videoId) {
+  clearTimeout(learningDraftSaveTimer);
+  if (!videoId || !globalThis.YTD_LEARNING_PACK) {
+    writeLearningReflection();
+    return;
+  }
+  try {
+    const key = YTD_LEARNING_PACK.draftStorageKey(videoId);
+    const result = await chrome.storage.local.get(key);
+    if (videoId !== currentVideoId) return;
+    writeLearningReflection(result[key]?.reflection || {});
+  } catch (error) {
+    console.error("[YouTube Digest] Could not load Learning Pack draft:", error);
+  }
+}
+
+function setCreatorWorkspaceStatus(type, message, directory = "") {
+  const status = document.getElementById("creatorWorkspaceHandoffStatus");
+  if (!status) return;
+  status.hidden = false;
+  status.className = `creator-workspace-status ${
+    type ? `creator-workspace-status--${type}` : ""
+  }`;
+  status.replaceChildren();
+
+  const messageElement = document.createElement("div");
+  messageElement.className = "creator-workspace-status-message";
+  messageElement.textContent = message;
+  status.appendChild(messageElement);
+  if (directory) {
+    const pathElement = document.createElement("code");
+    pathElement.className = "creator-workspace-path";
+    pathElement.textContent = directory;
+    status.appendChild(pathElement);
+  }
+}
+
+async function sendLearningPackToCreatorWorkspace(event) {
+  event?.preventDefault();
+  const sendButton = document.getElementById("sendToCreatorWorkspaceBtn");
+  if (!currentVideoId || !currentTranscript?.length) {
+    setCreatorWorkspaceStatus(
+      "error",
+      "Load a YouTube transcript before creating a Learning Pack.",
+    );
+    return;
+  }
+  if (!globalThis.YTD_LEARNING_PACK) {
+    setCreatorWorkspaceStatus(
+      "error",
+      "Learning Pack support is unavailable.",
+    );
+    return;
+  }
+
+  sendButton.disabled = true;
+  sendButton.textContent = "Sending...";
+  setCreatorWorkspaceStatus(
+    "working",
+    "Writing to the configured Creator Workspace inbox...",
+  );
+  try {
+    await saveLearningPackDraft();
+    const notesResult = await chrome.runtime.sendMessage({
+      action: "getNotes",
+      videoId: currentVideoId,
+    });
+    if (!notesResult?.success) {
+      throw new Error(notesResult?.error || "Could not load saved notes.");
+    }
+
+    const pack = YTD_LEARNING_PACK.buildLearningPack({
+      createdAt: new Date().toISOString(),
+      source: {
+        videoId: currentVideoId,
+        url: currentVideoUrl,
+        title: currentVideoTitle,
+        channelName: currentChannelName,
+        language: currentTranscriptLanguage,
+        durationSeconds: currentVideoDuration,
+      },
+      analysis: currentAnalysis,
+      notes: notesResult.notes,
+      reflection: readLearningReflection(),
+      extensionVersion: chrome.runtime.getManifest().version,
+      transcriptLanguage: currentTranscriptLanguage,
+      transcriptSegmentCount: currentTranscript.length,
+    });
+    const result = await chrome.runtime.sendMessage({
+      action: "sendLearningPack",
+      pack,
+    });
+    if (!result?.success) {
+      throw new Error(result?.error || "Creator Workspace handoff failed.");
+    }
+    setCreatorWorkspaceStatus(
+      "success",
+      "Learning Pack saved. No article project was created.",
+      result.receipt?.directory || "",
+    );
+  } catch (error) {
+    console.error("[YouTube Digest] Creator Workspace handoff failed:", error);
+    setCreatorWorkspaceStatus(
+      "error",
+      error?.message || "Creator Workspace handoff failed.",
+    );
+  } finally {
+    sendButton.disabled = false;
+    sendButton.textContent = "Send to Creator Workspace";
   }
 }
 
@@ -1335,7 +1503,7 @@ function getTranscriptContext(selectedText) {
 /**
  * Saves the current digest results to persistent local storage.
  * Results survive browser restarts — reopening the same video loads from cache
- * without consuming API tokens or Supadata calls.
+ * without consuming Codex usage or subtitle requests.
  * Cache expires after 30 days. Oldest entries evicted when > 20 videos cached.
  */
 async function saveToCache(videoId) {
@@ -2011,7 +2179,7 @@ async function translateTranscript() {
     if (processing || queue.length === 0 || generation !== translationGeneration)
       return;
     processing = true;
-    const indices = queue.splice(0, 3);
+    const indices = queue.splice(0, 12);
     indices.forEach((index) => queued.delete(index));
     try {
       await requestTranscriptTranslationBatch(

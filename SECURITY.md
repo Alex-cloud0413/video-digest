@@ -1,44 +1,46 @@
-# Security Policy
+# Security
 
-## Supported versions
+## Local bridge boundary
 
-YouTube Digest is a small GitHub-only project. Security fixes are made on the latest code on `main` and, when releases are published, the latest GitHub release. Older snapshots are not supported.
+The helper binds only to `127.0.0.1`, validates Chrome extension origins, and
+requires a randomly generated installation capability. Codex runs ephemerally
+in a dedicated runtime directory with a read-only sandbox, user rules ignored,
+and tools prohibited. Requests are serialized and bounded by size and time.
 
-## Report a vulnerability privately
+Transcript text and other model inputs are untrusted data. The helper wraps
+them in explicit boundaries and instructs Codex not to follow embedded commands,
+links, or tool requests.
 
-Do not publish vulnerability details, exposed credentials, private video information, or transcript data through a public issue or pull request. This repository does not accept public security reports.
+## Creator Workspace boundary
 
-Use GitHub's private vulnerability reporting flow from this repository's **Security** tab when it is available. If the private reporting link is not visible, contact the repository owner through their GitHub profile and ask for a private reporting channel without including vulnerability details in the public message. Include the following only in the private report:
+The workspace root comes only from `bridge/workspace-config.json` or the local
+process environment. Browser requests cannot supply a destination. The helper
+rejects transcript fields, article intent, unsupported top-level fields, path
+escape, and symlinked inbox directories before writing a Learning Pack.
 
-- the affected version or commit;
-- the minimum steps needed to reproduce the problem;
-- the expected and observed behavior;
-- the security and privacy impact; and
-- a suggested fix, if you have one.
+## Sensitive local files
 
-Remove real API keys, access tokens, private URLs, transcripts, notes, and personal information. Use redacted values and public test content.
+The following files are generated locally and ignored by Git:
 
-There is no guaranteed response time or bug-bounty program. Please allow a reasonable period for investigation and remediation before public disclosure.
+- `bridge-config.js`
+- `bridge/bridge-config.json`
+- `bridge/workspace-config.json`
 
-## High-priority issues
+The first two contain the same local installation capability; the third may
+contain a device-specific path. Do not commit, package, log, or share them. If
+the capability is exposed, stop the helper, remove the two capability files,
+run `node bridge/generate-config.js`, reload the extension, and restart the helper.
 
-Examples include:
+## Supported scope
 
-- API keys or private content included in source, logs, screenshots, or release ZIPs;
-- requests to network origins outside the documented YouTube, Supadata, and DeepSeek hosts;
-- script or HTML injection through transcript, metadata, service errors, or model output;
-- access to browsing data outside the documented YouTube scope;
-- unintended transmission of notes, transcripts, or credentials;
-- a dependency or release-workflow compromise; and
-- bypasses of local data deletion or DeepSeek configuration controls.
+The Chrome manifest permits only YouTube subtitle hosts and the loopback helper.
+The helper must never listen on a LAN or public interface. Any change to the
+host, port, origin policy, Codex sandbox, or write-root rules requires a new
+security review.
 
-## User security guidance
+## Reporting
 
-- Install only from a GitHub source or release you trust.
-- Review changes and the packaged file list before loading an update.
-- Use dedicated, scoped API keys where possible and set provider spending limits.
-- Do not reuse keys from production systems.
-- Revoke keys immediately if a device, browser profile, ZIP, log, or screenshot exposes them.
-- Remember that Chrome local extension storage is not an encrypted password vault.
-
-The release tooling uses an explicit file allowlist and scans public files for common credential patterns, but automated checks cannot detect every secret.
+Do not include private transcripts, notes, generated capability values, or local
+paths in a public report. Use the repository's GitHub Security tab when private
+vulnerability reporting is available; otherwise contact the maintainer without
+posting exploit details publicly.

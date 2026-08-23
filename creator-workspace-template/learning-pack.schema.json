@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Alex-cloud0413/youtube-digest-codex/blob/main/creator-workspace-template/learning-pack.schema.json",
+  "title": "YouTube Digest Learning Pack",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "state",
+    "articleIntent",
+    "createdAt",
+    "source",
+    "digest",
+    "notes",
+    "reflection",
+    "provenance"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "kind": { "const": "youtube-learning-pack" },
+    "state": { "const": "learning_complete" },
+    "articleIntent": { "const": false },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["videoId", "url", "title", "channelName", "language", "durationSeconds"],
+      "properties": {
+        "videoId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{6,20}$" },
+        "url": { "type": "string", "format": "uri" },
+        "title": { "type": "string", "maxLength": 500 },
+        "channelName": { "type": "string", "maxLength": 300 },
+        "language": { "type": "string", "maxLength": 40 },
+        "durationSeconds": { "type": "integer", "minimum": 0, "maximum": 172800 }
+      }
+    },
+    "digest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "summary", "worthWatchingIf", "tags", "chapters", "keyQuotes", "keyMoments"],
+      "properties": {
+        "status": { "enum": ["generated", "not_generated"] },
+        "summary": { "type": "string", "maxLength": 20000 },
+        "worthWatchingIf": { "type": "array", "maxItems": 20, "items": { "type": "string", "maxLength": 1000 } },
+        "tags": { "type": "array", "maxItems": 30, "items": { "type": "string", "maxLength": 100 } },
+        "chapters": { "type": "array", "maxItems": 100, "items": { "$ref": "#/$defs/chapter" } },
+        "keyQuotes": { "type": "array", "maxItems": 50, "items": { "$ref": "#/$defs/quote" } },
+        "keyMoments": { "type": "array", "maxItems": 100, "items": { "type": "integer", "minimum": 0, "maximum": 172800 } }
+      }
+    },
+    "notes": { "type": "array", "maxItems": 200, "items": { "$ref": "#/$defs/note" } },
+    "reflection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["myTake", "agreeDisagree", "connections", "coreClaim"],
+      "properties": {
+        "myTake": { "type": "string", "maxLength": 10000 },
+        "agreeDisagree": { "type": "string", "maxLength": 10000 },
+        "connections": { "type": "string", "maxLength": 10000 },
+        "coreClaim": { "type": "string", "maxLength": 2000 }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["producer", "extensionVersion", "transcriptIncluded", "transcriptLanguage", "transcriptSegmentCount", "digestGenerated", "notesCount"],
+      "properties": {
+        "producer": { "const": "youtube-digest-codex-local" },
+        "extensionVersion": { "type": "string", "maxLength": 40 },
+        "transcriptIncluded": { "const": false },
+        "transcriptLanguage": { "type": "string", "maxLength": 40 },
+        "transcriptSegmentCount": { "type": "integer", "minimum": 0, "maximum": 50000 },
+        "digestGenerated": { "type": "boolean" },
+        "notesCount": { "type": "integer", "minimum": 0, "maximum": 200 }
+      }
+    }
+  },
+  "$defs": {
+    "chapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "summary", "timestampSeconds", "timestamp"],
+      "properties": {
+        "title": { "type": "string", "maxLength": 300 },
+        "summary": { "type": "string", "maxLength": 1500 },
+        "timestampSeconds": { "type": "integer", "minimum": 0, "maximum": 172800 },
+        "timestamp": { "type": "string", "pattern": "^[0-9]+:[0-5][0-9]$" }
+      }
+    },
+    "quote": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["quote", "timestampSeconds", "timestamp"],
+      "properties": {
+        "quote": { "type": "string", "maxLength": 3000 },
+        "timestampSeconds": { "type": "integer", "minimum": 0, "maximum": 172800 },
+        "timestamp": { "type": "string", "pattern": "^[0-9]+:[0-5][0-9]$" }
+      }
+    },
+    "note": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "text", "rawText", "timestampSeconds", "timestamp", "timestampedUrl", "createdAt"],
+      "properties": {
+        "id": { "type": "string", "maxLength": 120 },
+        "text": { "type": "string", "maxLength": 10000 },
+        "rawText": { "type": "string", "maxLength": 10000 },
+        "timestampSeconds": { "type": "integer", "minimum": 0, "maximum": 172800 },
+        "timestamp": { "type": "string", "pattern": "^[0-9]+:[0-5][0-9]$" },
+        "timestampedUrl": { "type": "string", "format": "uri" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

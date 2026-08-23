@@ -5,8 +5,8 @@
   --border: #e7dfd2;
   --text: #2e2a24;
   --muted: #6b6258;
-  --accent: #c8674f;
-  --accent-hover: #ad523e;
+  --accent: #ff0033;
+  --accent-hover: #cc0029;
   --danger: #9f2d2d;
 }
 
@@ -71,7 +71,7 @@ header {
 }
 
 .language-switch .language-option:focus-visible {
-  outline: 3px solid rgba(200, 103, 79, 0.28);
+  outline: 3px solid rgba(255, 0, 51, 0.24);
   outline-offset: 1px;
 }
 
@@ -139,7 +139,7 @@ textarea {
 input:focus,
 textarea:focus {
   border-color: var(--accent);
-  outline: 3px solid rgba(200, 103, 79, 0.14);
+  outline: 3px solid rgba(255, 0, 51, 0.12);
 }
 
 textarea {
@@ -163,8 +163,8 @@ a {
   margin-top: 18px;
   padding: 12px 14px;
   border-radius: 10px;
-  background: #f8eee9;
-  color: #60483f;
+  background: #fff0f3;
+  color: #64152a;
   font-size: 13px;
 }
 
@@ -180,9 +180,9 @@ a {
   justify-content: space-between;
   margin-bottom: 18px;
   padding: 13px 14px;
-  border: 1px solid #ecd8ce;
+  border: 1px solid #ffd0d9;
   border-radius: 12px;
-  background: #fdf6f2;
+  background: #fff7f8;
 }
 
 .provider-name {
@@ -193,16 +193,16 @@ a {
 .agent-badge {
   padding: 4px 9px;
   border-radius: 999px;
-  background: #f2e3dc;
-  color: #714b3f;
+  background: #ffe3e9;
+  color: #71172d;
   font-size: 11px;
   font-weight: 800;
 }
 
 .customization-card {
   padding: 0;
-  border-color: #ddc2b7;
-  background: linear-gradient(145deg, #fff 0%, #fff9f6 100%);
+  border-color: #ffc1ce;
+  background: linear-gradient(145deg, #fff 0%, #fff7f9 100%);
   overflow: hidden;
 }
 
@@ -237,11 +237,11 @@ a {
 }
 
 .customization-summary:hover {
-  background: #fdf3ee;
+  background: #fff1f4;
 }
 
 .customization-summary:focus-visible {
-  outline: 3px solid rgba(200, 103, 79, 0.28);
+  outline: 3px solid rgba(255, 0, 51, 0.24);
   outline-offset: -3px;
 }
 
@@ -264,7 +264,7 @@ a {
 
 .customization-content {
   padding: 19px 22px 22px;
-  border-top: 1px solid #ead8d0;
+  border-top: 1px solid #ffd0d9;
 }
 
 .customization-intro {
@@ -289,10 +289,10 @@ a {
 .prompt-reminder {
   margin: 8px 0 10px;
   padding: 10px 12px;
-  border: 1px solid #e7b9a8;
+  border: 1px solid #ffb3c2;
   border-radius: 10px;
-  background: #fff2ec;
-  color: #60483f;
+  background: #fff0f3;
+  color: #64152a;
   font-size: 13px;
   font-weight: 750;
 }

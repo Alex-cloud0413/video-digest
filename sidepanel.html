@@ -33,6 +33,7 @@
         <button class="tab active" data-tab="transcript">Transcript</button>
         <button class="tab" data-tab="overview">Overview</button>
         <button class="tab" data-tab="notes">Notes</button>
+        <button class="tab" data-tab="create">Create</button>
       </div>
     </div>
 
@@ -192,6 +193,98 @@
             <div id="notesList"></div>
           </div>
         </div>
+
+        <!-- TAB: Create a bounded Learning Pack for a Creator Workspace -->
+        <div class="tab-panel" data-panel="create">
+          <div class="create-hero">
+            <div class="create-eyebrow">LEARNING PACK</div>
+            <h2 class="create-title">Turn learning into a reusable input</h2>
+            <p class="create-description">
+              Add your own thinking, then send the digest and notes to the
+              configured Creator Workspace inbox.
+            </p>
+            <div class="learning-state-row">
+              <span class="learning-state-dot" aria-hidden="true"></span>
+              <span>Learning complete</span>
+              <span class="learning-state-divider" aria-hidden="true">·</span>
+              <span>Article not started</span>
+            </div>
+          </div>
+
+          <form class="learning-form" id="learningPackForm">
+            <label class="learning-field" for="createMyTake">
+              <span class="learning-label">My take</span>
+              <span class="learning-hint">What matters most to you?</span>
+              <textarea
+                id="createMyTake"
+                rows="4"
+                maxlength="10000"
+                placeholder="The idea I want to remember is..."
+              ></textarea>
+            </label>
+
+            <label class="learning-field" for="createAgreeDisagree">
+              <span class="learning-label">Agree / disagree</span>
+              <span class="learning-hint">Where do you differ from the video?</span>
+              <textarea
+                id="createAgreeDisagree"
+                rows="3"
+                maxlength="10000"
+                placeholder="I agree with... but I question..."
+              ></textarea>
+            </label>
+
+            <label class="learning-field" for="createConnections">
+              <span class="learning-label">Connections</span>
+              <span class="learning-hint">Link it to your work, life, or existing ideas.</span>
+              <textarea
+                id="createConnections"
+                rows="3"
+                maxlength="10000"
+                placeholder="This connects to..."
+              ></textarea>
+            </label>
+
+            <label class="learning-field" for="createCoreClaim">
+              <span class="learning-label">Possible core claim</span>
+              <span class="learning-hint">Optional — a seed, not an article brief.</span>
+              <textarea
+                id="createCoreClaim"
+                rows="2"
+                maxlength="2000"
+                placeholder="One claim worth developing later might be..."
+              ></textarea>
+            </label>
+
+            <div class="pack-contents" aria-label="Learning Pack contents">
+              <div class="pack-contents-title">This handoff includes</div>
+              <div class="pack-content-row"><span>Video source</span><span>✓</span></div>
+              <div class="pack-content-row"><span>Overview, if generated</span><span>✓</span></div>
+              <div class="pack-content-row"><span>Saved notes</span><span>✓</span></div>
+              <div class="pack-content-row"><span>Your reflection</span><span>✓</span></div>
+              <div class="pack-content-row pack-content-excluded"><span>Full transcript</span><span>Not included</span></div>
+            </div>
+
+            <button
+              class="creator-workspace-send-btn"
+              id="sendToCreatorWorkspaceBtn"
+              type="submit"
+            >
+              Send to Creator Workspace
+            </button>
+            <p class="creator-workspace-boundary">
+              Saves a Learning Pack only. It does not create an article
+              project or publish anything.
+            </p>
+            <div
+              class="creator-workspace-status"
+              id="creatorWorkspaceHandoffStatus"
+              role="status"
+              aria-live="polite"
+              hidden
+            ></div>
+          </form>
+        </div>
       </div>
     </div>
 
@@ -205,6 +298,7 @@
     </button>
 
     <script src="settings.js"></script>
+    <script src="learning-pack.js"></script>
     <script src="sidepanel.js"></script>
   </body>
 </html>

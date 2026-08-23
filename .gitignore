@@ -1,5 +1,11 @@
 # Secrets — your real keys live here, never commit them
 config.js
+bridge-config.js
+bridge/bridge-config.json
+bridge/workspace-config.json
+bridge/com.youtube-digest.codex-bridge.plist
+bridge/*.log
+bridge/*.pid
 
 # OS / editor cruft
 .DS_Store
