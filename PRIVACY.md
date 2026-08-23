@@ -9,10 +9,13 @@ description, duration, and available subtitle track. Generated digests,
 translations, notes, and unfinished Create-page reflection drafts are stored in
 the current Chrome profile.
 
-Overview, explanation, translation, and note-polishing actions send only the
-content required for that action to the loopback helper on `127.0.0.1`. The
-helper passes it to the locally signed-in Codex CLI. OpenAI processes that
-content under the terms and privacy controls of the signed-in ChatGPT account.
+Overview, explanation, focused-question, translation, and note-polishing
+actions send only the content required for that action to the loopback helper
+on `127.0.0.1`. A focused question includes the chosen excerpt, limited nearby
+transcript context when available, and the question itself. The helper passes
+it to the locally signed-in Codex CLI. OpenAI processes that content under the
+terms and privacy controls of the signed-in ChatGPT account. Answers saved to
+Notes remain in the current Chrome profile until deleted.
 
 The optional Creator Workspace handoff writes a bounded Learning Pack to the
 locally configured workspace. It includes source metadata, an overview when

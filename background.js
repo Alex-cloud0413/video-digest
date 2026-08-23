@@ -15,6 +15,7 @@
 // protects a loopback service; it is not an external provider or API key.
 importScripts("settings.js");
 importScripts("bridge-config.js");
+importScripts("question-answer.js");
 
 const DEBUG = false;
 const AI_PROVIDER_HARD_TIMEOUT_MS = 185_000;
@@ -326,6 +327,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     )
       .then(sendResponse)
       .catch((err) => sendResponse({ error: err.message }));
+    return true;
+  }
+
+  if (message.action === "askContextQuestion") {
+    handleContextQuestion(message.request)
+      .then(sendResponse)
+      .catch((err) => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
+  if (message.action === "saveQuestionAnswerNote") {
+    handleSaveQuestionAnswerNote(message.request, message.answer)
+      .then(sendResponse)
+      .catch((err) => sendResponse({ success: false, error: err.message }));
     return true;
   }
 
@@ -1580,6 +1595,80 @@ async function handleExplainSelection(
     return {
       success: false,
       error: error.message || "Failed to explain selection",
+    };
+  }
+}
+
+// ============================================================
+// FOCUSED QUESTIONS — Transcript / Overview / Notes
+// ============================================================
+
+async function handleContextQuestion(payload) {
+  try {
+    const request = YTD_QUESTION_ANSWER.normalizeQuestionRequest(payload);
+    const variables = {
+      videoTitle: request.videoTitle,
+      sourceLabel: request.sourceLabel,
+      timestamp: YTD_QUESTION_ANSWER.formatTimestamp(
+        request.timestampSeconds,
+      ),
+      sourceText: request.sourceText,
+      surroundingContext: request.surroundingContext || "Not available",
+      question: request.question,
+    };
+    const systemPrompt = await loadPromptSection(
+      "context-question.md",
+      "System prompt",
+      variables,
+    );
+    const userPrompt = await loadPromptSection(
+      "context-question.md",
+      "User prompt",
+      variables,
+    );
+
+    debugLog("[YouTube Digest] Requesting focused context answer");
+    const { text: answer } = await requestAiCompletion({
+      maxTokens: 1800,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+    });
+
+    return {
+      success: true,
+      answer: answer.trim().slice(0, 8_000),
+    };
+  } catch (error) {
+    console.error("Focused context question error:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to answer the focused question",
+    };
+  }
+}
+
+async function handleSaveQuestionAnswerNote(payload, answer) {
+  try {
+    const request = YTD_QUESTION_ANSWER.normalizeQuestionRequest(payload);
+    const canonicalVideoUrl = YTD_SETTINGS.canonicalYouTubeUrl(
+      request.videoId,
+    );
+    const note = YTD_QUESTION_ANSWER.buildQuestionAnswerNote({
+      request,
+      answer,
+      canonicalVideoUrl,
+    });
+
+    await saveNoteToStorage(note);
+    chrome.runtime.sendMessage({ action: "noteSaved", note }).catch(() => {});
+    return { success: true, note };
+  } catch (error) {
+    console.error("Save question answer note error:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to save the Codex answer",
     };
   }
 }

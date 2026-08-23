@@ -15,6 +15,7 @@ for (const file of [
   "manifest.json",
   "background.js",
   "learning-pack.js",
+  "question-answer.js",
   "settings.js",
   "bridge-config.js",
   "sidepanel.html",
@@ -30,6 +31,7 @@ for (const file of [
 for (const file of [
   "background.js",
   "learning-pack.js",
+  "question-answer.js",
   "settings.js",
   "sidepanel.js",
   "options.js",

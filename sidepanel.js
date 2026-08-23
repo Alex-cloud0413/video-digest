@@ -682,6 +682,9 @@ function renderAnalysisResults(analysis) {
       <div class="chapter-content">
         <span class="chapter-title">${escapeHtml(chapter.title)}</span>
         <span class="chapter-summary">${escapeHtml(chapter.summary || "")}</span>
+        <div class="chapter-actions">
+          <button class="context-ask-btn" type="button" title="Ask Codex about this chapter">✦ Ask</button>
+        </div>
       </div>
     `;
     li.addEventListener("click", () => {
@@ -691,6 +694,16 @@ function renderAnalysisResults(analysis) {
         chapter.timestampSeconds,
       );
       seekTo(chapter.timestampSeconds);
+    });
+    attachContextAskButton(li, {
+      sourceType: "overview",
+      sourceLabel: "Overview chapter",
+      sourceText: [chapter.title, chapter.summary].filter(Boolean).join("\n"),
+      surroundingContext: getTranscriptContextAtTime(chapter.timestampSeconds),
+      videoId: currentVideoId,
+      videoTitle: currentVideoTitle,
+      channelName: currentChannelName,
+      timestampSeconds: chapter.timestampSeconds,
     });
     chapterList.appendChild(li);
   });
@@ -710,6 +723,7 @@ function renderAnalysisResults(analysis) {
       <div class="quote-meta">
         <span class="quote-timestamp">${escapeHtml(quote.timestamp)}</span>
         <div class="quote-actions">
+          <button class="context-ask-btn" type="button" title="Ask Codex about this quote">✦ Ask</button>
           <button class="quote-save-note-btn" title="Save this quote as a note">📝 Note</button>
           <button class="quote-copy-btn" title="Copy this quote">⧉ Copy</button>
         </div>
@@ -722,6 +736,16 @@ function renderAnalysisResults(analysis) {
         quote.timestampSeconds,
       );
       seekTo(quote.timestampSeconds);
+    });
+    attachContextAskButton(div, {
+      sourceType: "overview",
+      sourceLabel: "Overview quote",
+      sourceText: quote.quote,
+      surroundingContext: getTranscriptContextAtTime(quote.timestampSeconds),
+      videoId: currentVideoId,
+      videoTitle: currentVideoTitle,
+      channelName: currentChannelName,
+      timestampSeconds: quote.timestampSeconds,
     });
 
     const quoteCopyBtn = div.querySelector(".quote-copy-btn");
@@ -866,11 +890,22 @@ function renderTranscript() {
     div.innerHTML = `
       <span class="transcript-time">${timestamp}</span>
       <span class="transcript-text">${renderSubtitleInlineMarkup(group.text)}</span>
+      <button class="context-ask-btn transcript-context-ask-btn" type="button" title="Ask Codex about this transcript passage">Ask</button>
     `;
 
     div.addEventListener("click", (event) =>
       seekFromTranscriptEntryClick(event, group.start),
     );
+    attachContextAskButton(div, {
+      sourceType: "transcript",
+      sourceLabel: "Transcript",
+      sourceText: group.text,
+      surroundingContext: getTranscriptContextAtTime(group.start),
+      videoId: currentVideoId,
+      videoTitle: currentVideoTitle,
+      channelName: currentChannelName,
+      timestampSeconds: group.start,
+    });
     transcriptList.appendChild(div);
   });
 
@@ -1257,6 +1292,153 @@ function playNote(note) {
   }
 }
 
+function getTranscriptContextAtTime(timestampSeconds) {
+  if (!Array.isArray(currentTranscript) || currentTranscript.length === 0) {
+    return "";
+  }
+  const target = Math.max(0, Number(timestampSeconds) || 0);
+  let targetIndex = currentTranscript.findIndex(
+    (entry, index) =>
+      entry.start <= target &&
+      (!currentTranscript[index + 1] || currentTranscript[index + 1].start > target),
+  );
+  if (targetIndex === -1) targetIndex = currentTranscript.length - 1;
+  return currentTranscript
+    .slice(Math.max(0, targetIndex - 4), targetIndex + 7)
+    .map((entry) => entry.text)
+    .join(" ")
+    .slice(0, 16_000);
+}
+
+function attachContextAskButton(container, context) {
+  const button = container.querySelector(".context-ask-btn");
+  if (!button) return;
+  ["mousedown", "mouseup"].forEach((eventName) => {
+    button.addEventListener(eventName, (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+  });
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openContextQuestion(context);
+  });
+}
+
+function openContextQuestion(context) {
+  document.getElementById("contextQuestionModal")?.remove();
+  const timestamp = YTD_QUESTION_ANSWER.formatTimestamp(
+    context.timestampSeconds,
+  );
+  const modal = document.createElement("div");
+  modal.id = "contextQuestionModal";
+  modal.className = "context-question-overlay";
+  modal.innerHTML = `
+    <div class="context-question-modal" role="dialog" aria-modal="true" aria-labelledby="contextQuestionTitle">
+      <div class="context-question-header">
+        <div>
+          <div class="context-question-eyebrow">ASK CODEX</div>
+          <div class="context-question-title" id="contextQuestionTitle">Ask about this passage</div>
+        </div>
+        <button class="context-question-close" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="context-question-source">
+        <div class="context-question-source-meta">
+          <span>${escapeHtml(context.sourceLabel)}</span>
+          <span>${escapeHtml(timestamp)}</span>
+        </div>
+        <div class="context-question-excerpt">${escapeHtml(context.sourceText).replace(/\n/g, "<br>")}</div>
+      </div>
+      <form class="context-question-form">
+        <label for="contextQuestionInput">Your question</label>
+        <textarea id="contextQuestionInput" rows="3" maxlength="2000" required placeholder="What do you want to understand about this passage?"></textarea>
+        <button class="context-question-submit" type="submit">Ask Codex</button>
+      </form>
+      <div class="context-question-result" aria-live="polite" hidden>
+        <div class="context-question-answer"></div>
+        <button class="context-question-save" type="button" hidden>＋ Save answer to Notes</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const close = () => modal.remove();
+  modal.querySelector(".context-question-close").addEventListener("click", close);
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) close();
+  });
+
+  const form = modal.querySelector(".context-question-form");
+  const input = modal.querySelector("#contextQuestionInput");
+  const submit = modal.querySelector(".context-question-submit");
+  const resultBox = modal.querySelector(".context-question-result");
+  const answerBox = modal.querySelector(".context-question-answer");
+  const saveButton = modal.querySelector(".context-question-save");
+  let latestRequest = null;
+  let latestAnswer = "";
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const question = input.value.trim();
+    if (!question) return;
+    latestRequest = { ...context, question };
+    latestAnswer = "";
+    submit.disabled = true;
+    submit.textContent = "Asking Codex…";
+    resultBox.hidden = false;
+    saveButton.disabled = false;
+    saveButton.hidden = true;
+    saveButton.textContent = "＋ Save answer to Notes";
+    answerBox.innerHTML = `
+      <div class="explain-loading">
+        <div class="loading-bar"></div>
+        <span>Reading the selected context…</span>
+      </div>
+    `;
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: "askContextQuestion",
+        request: latestRequest,
+      });
+      if (!response?.success) {
+        throw new Error(response?.error || "Codex could not answer this question.");
+      }
+      latestAnswer = response.answer;
+      answerBox.innerHTML = `<div class="context-question-answer-text">${escapeHtml(latestAnswer).replace(/\n/g, "<br>")}</div>`;
+      saveButton.hidden = false;
+    } catch (error) {
+      answerBox.innerHTML = `<div class="explain-error">${escapeHtml(error.message)}</div>`;
+    } finally {
+      submit.disabled = false;
+      submit.textContent = "Ask Codex";
+    }
+  });
+
+  saveButton.addEventListener("click", async () => {
+    if (!latestRequest || !latestAnswer) return;
+    saveButton.disabled = true;
+    saveButton.textContent = "Saving…";
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: "saveQuestionAnswerNote",
+        request: latestRequest,
+        answer: latestAnswer,
+      });
+      if (!response?.success) {
+        throw new Error(response?.error || "Could not save this answer.");
+      }
+      saveButton.textContent = "✓ Saved to Notes";
+    } catch (error) {
+      saveButton.disabled = false;
+      saveButton.textContent = `Retry save: ${error.message}`;
+    }
+  });
+
+  input.focus();
+}
+
 async function highlightMomentsOnPage(moments) {
   if (!moments || !moments.length) return;
 
@@ -1359,11 +1541,15 @@ function setupExplainFeature() {
   const tooltip = document.createElement("div");
   tooltip.id = "explainTooltip";
   tooltip.className = "explain-tooltip";
-  tooltip.innerHTML = `<button class="explain-btn">💡 Explain</button>`;
+  tooltip.innerHTML = `
+    <button class="explain-btn">💡 Explain</button>
+    <button class="selection-ask-btn">✦ Ask</button>
+  `;
   tooltip.style.display = "none";
   document.body.appendChild(tooltip);
 
   let selectedText = "";
+  let selectedTimestampSeconds = 0;
 
   // Interacting with Explain must preserve the transcript selection and stay
   // isolated from document/row click behavior.
@@ -1389,12 +1575,18 @@ function setupExplainFeature() {
     // Allow any selection length (removed 10+ char requirement)
     if (text.length > 0 && isInTranscript) {
       selectedText = text;
+      const anchorElement =
+        selection.anchorNode?.nodeType === Node.TEXT_NODE
+          ? selection.anchorNode.parentElement
+          : selection.anchorNode;
+      const transcriptEntry = anchorElement?.closest?.(".transcript-entry");
+      selectedTimestampSeconds = Number(transcriptEntry?.dataset.seconds) || 0;
 
       // Position the tooltip near the selection
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
 
-      tooltip.style.display = "block";
+      tooltip.style.display = "flex";
       tooltip.style.top = `${rect.bottom + window.scrollY + 8}px`;
       tooltip.style.left = `${rect.left + rect.width / 2}px`;
     } else {
@@ -1419,6 +1611,27 @@ function setupExplainFeature() {
 
       tooltip.style.display = "none";
       await showExplanation(selectedText);
+    });
+
+  tooltip
+    .querySelector(".selection-ask-btn")
+    .addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!selectedText) return;
+      tooltip.style.display = "none";
+      openContextQuestion({
+        sourceType: "transcript",
+        sourceLabel: "Transcript selection",
+        sourceText: selectedText,
+        surroundingContext: getTranscriptContextAtTime(
+          selectedTimestampSeconds,
+        ),
+        videoId: currentVideoId,
+        videoTitle: currentVideoTitle,
+        channelName: currentChannelName,
+        timestampSeconds: selectedTimestampSeconds,
+      });
     });
 }
 
@@ -1669,19 +1882,36 @@ function renderNotes(notes, filteredVideoId) {
   notes.forEach((note) => {
     const noteEl = document.createElement("div");
     noteEl.className = "note-item";
+    const noteBody =
+      note.noteType === "question_answer" && note.question && note.answer
+        ? `<div class="note-question"><span>Q</span>${escapeHtml(note.question)}</div><div class="note-answer"><span>A</span>${escapeHtml(note.answer).replace(/\n/g, "<br>")}</div>`
+        : `"${escapeHtml(note.text)}"`;
     noteEl.innerHTML = `
       <div class="note-header">
         <span class="note-timestamp" data-url="${escapeHtml(note.timestampedUrl)}" data-seconds="${Number(note.timestampSeconds) || 0}">${escapeHtml(note.timestamp)}</span>
         ${!filteredVideoId ? `<span class="note-video-title">${escapeHtml(note.videoTitle)}</span>` : ""}
+        ${note.noteType === "question_answer" ? '<span class="note-kind">Codex answer</span>' : ""}
         <button class="note-delete" data-id="${escapeHtml(note.id)}" title="Delete note">✕</button>
       </div>
-      <div class="note-text">"${escapeHtml(note.text)}"</div>
+      <div class="note-text">${noteBody}</div>
       <div class="note-actions">
+        <button class="note-action-btn context-ask-btn">✦ Ask</button>
         <button class="note-action-btn note-copy-text">⧉ Copy text</button>
         <button class="note-action-btn note-copy-link" data-url="${escapeHtml(note.timestampedUrl)}">🔗 Copy timestamp</button>
         <button class="note-action-btn note-play" data-seconds="${Number(note.timestampSeconds) || 0}">▶ Play</button>
       </div>
     `;
+
+    attachContextAskButton(noteEl, {
+      sourceType: "note",
+      sourceLabel: "Saved note",
+      sourceText: note.text,
+      surroundingContext: note.rawText || "",
+      videoId: note.videoId,
+      videoTitle: note.videoTitle,
+      channelName: note.channelName || "",
+      timestampSeconds: note.timestampSeconds,
+    });
 
     // Timestamp click - play from this point (in this tab or a new one)
     noteEl.querySelector(".note-timestamp").addEventListener("click", () => {
@@ -2001,10 +2231,21 @@ function renderTranscriptModeRows(segments, mode) {
     div.innerHTML = `
       <span class="transcript-time">${timestamp}</span>
       ${renderTranscriptSegmentContent(segment, mode, cached, "")}
+      <button class="context-ask-btn transcript-context-ask-btn" type="button" title="Ask Codex about this transcript passage">Ask</button>
     `;
     div.addEventListener("click", (event) =>
       seekFromTranscriptEntryClick(event, segment.start),
     );
+    attachContextAskButton(div, {
+      sourceType: "transcript",
+      sourceLabel: "Transcript",
+      sourceText: segment.text,
+      surroundingContext: getTranscriptContextAtTime(segment.start),
+      videoId: currentVideoId,
+      videoTitle: currentVideoTitle,
+      channelName: currentChannelName,
+      timestampSeconds: segment.start,
+    });
     transcriptList.appendChild(div);
     rows.push(div);
   });

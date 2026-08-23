@@ -520,6 +520,12 @@ body {
   line-height: 1.5;
 }
 
+.chapter-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
 /* ============================================================
    KEY QUOTES
    ============================================================ */
@@ -573,7 +579,8 @@ body {
 
 /* One-click copy and save-note buttons on each quote */
 .quote-copy-btn,
-.quote-save-note-btn {
+.quote-save-note-btn,
+.quote-actions .context-ask-btn {
   font-family: var(--font-body);
   font-weight: 600;
   font-size: 11px;
@@ -587,7 +594,8 @@ body {
 }
 
 .quote-copy-btn:hover,
-.quote-save-note-btn:hover {
+.quote-save-note-btn:hover,
+.quote-actions .context-ask-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
   background: var(--accent-dim);
@@ -666,11 +674,42 @@ body {
   font-size: 13.5px;
   color: var(--text-secondary);
   line-height: 1.55;
+  flex: 1;
+  min-width: 0;
 }
 
 .transcript-copy {
   min-width: 0;
   flex: 1;
+}
+
+.context-ask-btn {
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: 650 11px/1.3 var(--font-body);
+  padding: 5px 10px;
+  transition: all 0.18s ease;
+}
+
+.context-ask-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.transcript-context-ask-btn {
+  align-self: flex-start;
+  flex-shrink: 0;
+  opacity: 0.35;
+  transform: translateY(-1px);
+}
+
+.transcript-entry:hover .transcript-context-ask-btn,
+.transcript-entry:focus-within .transcript-context-ask-btn {
+  opacity: 1;
 }
 
 .transcript-original,
@@ -1058,9 +1097,12 @@ body {
   z-index: 1000;
   transform: translateX(-50%);
   animation: fadeIn 0.15s ease;
+  display: flex;
+  gap: 6px;
 }
 
-.explain-btn {
+.explain-btn,
+.selection-ask-btn {
   font-family: var(--font-body);
   font-weight: 600;
   font-size: 11.5px;
@@ -1075,9 +1117,179 @@ body {
   transition: all 0.18s ease;
 }
 
-.explain-btn:hover {
+.explain-btn:hover,
+.selection-ask-btn:hover {
   background: var(--accent-hover);
   transform: scale(1.05);
+}
+
+.selection-ask-btn {
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  box-shadow: var(--shadow-md);
+}
+
+/* ============================================================
+   FOCUSED CONTEXT QUESTIONS
+   ============================================================ */
+.context-question-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(3px);
+  animation: fadeIn 0.18s ease;
+}
+
+.context-question-modal {
+  width: 100%;
+  max-width: 440px;
+  max-height: 88vh;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.context-question-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+
+.context-question-eyebrow {
+  color: var(--accent);
+  font: 750 10px/1.3 var(--font-body);
+  letter-spacing: 0.9px;
+}
+
+.context-question-title {
+  margin-top: 3px;
+  color: var(--text);
+  font: 650 18px/1.3 var(--font-display);
+}
+
+.context-question-close {
+  padding: 5px 10px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: 500 16px/1 var(--font-body);
+}
+
+.context-question-close:hover {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.context-question-source {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--accent-dim);
+}
+
+.context-question-source-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 7px;
+  color: var(--accent);
+  font: 650 10.5px/1.35 var(--font-body);
+}
+
+.context-question-excerpt {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font: 400 13px/1.55 var(--font-reading);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+}
+
+.context-question-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 18px;
+}
+
+.context-question-form label {
+  color: var(--text);
+  font: 650 12.5px/1.4 var(--font-body);
+}
+
+.context-question-form textarea {
+  width: 100%;
+  min-height: 82px;
+  resize: vertical;
+  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  outline: none;
+  background: var(--surface-raised);
+  color: var(--text);
+  font: 400 13.5px/1.55 var(--font-reading);
+}
+
+.context-question-form textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.context-question-submit,
+.context-question-save {
+  padding: 9px 14px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  font: 650 12px/1.4 var(--font-body);
+}
+
+.context-question-submit:disabled,
+.context-question-save:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.context-question-result {
+  padding: 0 18px 18px;
+}
+
+.context-question-answer {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-raised);
+}
+
+.context-question-answer-text {
+  color: var(--text);
+  font: 400 13.5px/1.7 var(--font-reading);
+}
+
+.context-question-save {
+  width: 100%;
+  margin-top: 10px;
+  border: 1px solid var(--accent);
+  background: var(--surface);
+  color: var(--accent);
 }
 
 .explain-modal-overlay {
@@ -1502,11 +1714,44 @@ body {
   line-height: 1.65;
   color: var(--text);
   margin-bottom: 12px;
+  white-space: pre-wrap;
+}
+
+.note-question,
+.note-answer {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 7px;
+}
+
+.note-question {
+  margin-bottom: 10px;
+  color: var(--text-secondary);
+}
+
+.note-answer {
+  color: var(--text);
+}
+
+.note-question > span,
+.note-answer > span {
+  color: var(--accent);
+  font: 750 11px/1.7 var(--font-body);
 }
 
 .note-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.note-kind {
+  padding: 3px 8px;
+  border-radius: var(--r-pill);
+  background: var(--accent-dim);
+  color: var(--accent);
+  font: 650 10px/1.35 var(--font-body);
+  white-space: nowrap;
 }
 
 .note-action-btn {

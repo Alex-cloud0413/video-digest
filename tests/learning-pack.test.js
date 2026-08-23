@@ -44,7 +44,7 @@ function sampleInput() {
       connections: "This connects to zero-basics explainers.",
       coreClaim: "Visual explanations reduce abstraction debt.",
     },
-    extensionVersion: "1.3.0",
+    extensionVersion: "1.4.0",
     transcriptLanguage: "en",
     transcriptSegmentCount: 200,
   };

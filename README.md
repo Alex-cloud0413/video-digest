@@ -17,6 +17,7 @@ Codex CLI.
 - Read subtitle tracks exposed by the active YouTube player.
 - View the original transcript, Simplified Chinese, or an aligned bilingual view.
 - Generate chapters, key quotes, explanations, translations, and polished notes with Codex.
+- Ask focused questions about any transcript passage, Overview item, or saved Note, then save the Codex answer back to Notes.
 - Save timestamped notes and navigate back to the matching point in the video.
 - Use the Create page to combine the source, overview, notes, and your own reflection.
 - Send a bounded Learning Pack to a configurable local Creator Workspace.
@@ -115,8 +116,10 @@ tool-agnostic personal content workflow that can consume these packs.
 2. Read or translate the transcript.
 3. Open **Overview** for chapters and key quotes.
 4. Select transcript text for an explanation.
-5. Save timestamped notes from the player or a quote.
-6. Open **Create**, add your reflection, and send the Learning Pack when ready.
+5. Choose **Ask** on a transcript passage, chapter, key quote, or Note to ask Codex a focused question in the side panel.
+6. Save a useful answer to **Notes** with its source and timestamp preserved.
+7. Save timestamped notes from the player or a quote.
+8. Open **Create**, add your reflection, and send the Learning Pack when ready.
 
 ## Privacy and security
 

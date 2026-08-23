@@ -28,7 +28,7 @@ function samplePack() {
     },
     notes: [{ id: "n1", text: "My saved note", timestampSeconds: 172 }],
     reflection: { myTake: "A useful mental model." },
-    extensionVersion: "1.3.0",
+    extensionVersion: "1.4.0",
     transcriptSegmentCount: 200,
   });
 }

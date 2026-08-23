@@ -60,7 +60,7 @@ test("Creator Workspace helper supplies only the server-owned inbox root", () =>
   const pack = buildLearningPack({
     source: { videoId: "aircAruvnKk", title: "Neural networks" },
     reflection: { myTake: "Useful" },
-    extensionVersion: "1.3.0",
+    extensionVersion: "1.4.0",
   });
   let writerOptions;
   const receipt = persistCreatorWorkspaceHandoff(pack, {
