@@ -29,6 +29,8 @@
   --accent: #ff0033; /* YouTube-inspired red, without copying its wordmark */
   --accent-hover: #cc0029;
   --accent-dim: rgba(255, 0, 51, 0.09);
+  --accent-shadow: rgba(255, 0, 51, 0.28);
+  --accent-shadow-strong: rgba(255, 0, 51, 0.34);
   --sage: var(--text);
   --sage-dim: var(--surface-raised);
   --success: var(--text);
@@ -54,6 +56,14 @@
   --font-reading: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
+}
+
+body[data-platform="bilibili"] {
+  --accent: #fb7299;
+  --accent-hover: #e45d86;
+  --accent-dim: rgba(251, 114, 153, 0.12);
+  --accent-shadow: rgba(251, 114, 153, 0.3);
+  --accent-shadow-strong: rgba(251, 114, 153, 0.38);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -206,7 +216,7 @@ body {
 .tab.active {
   color: #fff;
   background: var(--accent);
-  box-shadow: 0 2px 8px rgba(255, 0, 51, 0.28);
+  box-shadow: 0 2px 8px var(--accent-shadow);
 }
 
 .tab.active:hover {
@@ -856,7 +866,7 @@ body {
   letter-spacing: 0.3px;
   cursor: pointer;
   transition: all 0.18s ease;
-  box-shadow: 0 6px 18px rgba(255, 0, 51, 0.34);
+  box-shadow: 0 6px 18px var(--accent-shadow-strong);
 }
 
 .follow-playback-btn:hover {
@@ -971,7 +981,7 @@ body {
   cursor: pointer;
   transition: all 0.18s ease;
   margin-top: 8px;
-  box-shadow: 0 4px 14px rgba(255, 0, 51, 0.28);
+  box-shadow: 0 4px 14px var(--accent-shadow);
 }
 
 .error-btn:hover {
@@ -998,8 +1008,8 @@ body {
   width: 84px;
   height: 84px;
   border-radius: var(--r-xl);
-  background: linear-gradient(145deg, #ff1744, #e6002e);
-  box-shadow: 0 12px 30px rgba(255, 0, 51, 0.3);
+  background: linear-gradient(145deg, var(--accent), var(--accent-hover));
+  box-shadow: 0 12px 30px var(--accent-shadow);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1113,7 +1123,7 @@ body {
   border: none;
   border-radius: var(--r-pill);
   cursor: pointer;
-  box-shadow: 0 6px 16px rgba(255, 0, 51, 0.34);
+  box-shadow: 0 6px 16px var(--accent-shadow-strong);
   transition: all 0.18s ease;
 }
 
@@ -1536,7 +1546,7 @@ body {
   color: #ffffff;
   cursor: pointer;
   font: 650 13.5px/1.4 var(--font-body);
-  box-shadow: 0 4px 14px rgba(255, 0, 51, 0.28);
+  box-shadow: 0 4px 14px var(--accent-shadow);
   transition:
     background 0.18s ease,
     transform 0.18s ease;
@@ -1621,7 +1631,7 @@ body {
 .notes-filter .enhance-btn.active {
   background: var(--accent);
   color: white;
-  box-shadow: 0 2px 6px rgba(255, 0, 51, 0.28);
+  box-shadow: 0 2px 6px var(--accent-shadow);
 }
 
 .notes-filter .enhance-btn.active:hover:not(:disabled) {

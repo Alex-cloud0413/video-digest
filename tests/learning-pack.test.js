@@ -44,7 +44,7 @@ function sampleInput() {
       connections: "This connects to zero-basics explainers.",
       coreClaim: "Visual explanations reduce abstraction debt.",
     },
-    extensionVersion: "1.4.0",
+    extensionVersion: "1.5.0",
     transcriptLanguage: "en",
     transcriptSegmentCount: 200,
   };
@@ -52,8 +52,8 @@ function sampleInput() {
 
 test("builder emits the bounded learning_complete schema without a transcript", () => {
   const pack = buildLearningPack(sampleInput());
-  assert.equal(pack.schemaVersion, 1);
-  assert.equal(pack.kind, "youtube-learning-pack");
+  assert.equal(pack.schemaVersion, 2);
+  assert.equal(pack.kind, "video-learning-pack");
   assert.equal(pack.state, "learning_complete");
   assert.equal(pack.articleIntent, false);
   assert.equal(pack.source.url, "https://www.youtube.com/watch?v=aircAruvnKk");
@@ -79,7 +79,30 @@ test("validator rejects article intent, transcript data, and destination fields"
   );
 });
 
-test("draft keys are scoped to a validated YouTube video ID", () => {
-  assert.equal(draftStorageKey("aircAruvnKk"), "learning_pack_draft_aircAruvnKk");
+test("draft keys are scoped to a validated platform video ID", () => {
+  assert.equal(draftStorageKey("aircAruvnKk"), "learning_pack_draft_youtube_aircAruvnKk");
+  assert.equal(
+    draftStorageKey("bilibili", "BV1zu4y1y7Sh", 2),
+    "learning_pack_draft_bilibili_BV1zu4y1y7Sh_p2",
+  );
   assert.throws(() => draftStorageKey("../escape"), /valid video ID/);
+});
+
+test("builder emits a canonical Bilibili Learning Pack", () => {
+  const input = sampleInput();
+  input.source = {
+    ...input.source,
+    platform: "bilibili",
+    videoId: "BV1zu4y1y7Sh",
+    pageNumber: 2,
+    url: "https://www.bilibili.com/video/BV1zu4y1y7Sh/?p=2&spm_id_from=test",
+  };
+  const pack = buildLearningPack(input);
+  assert.equal(pack.source.platform, "bilibili");
+  assert.equal(pack.source.pageNumber, 2);
+  assert.equal(pack.source.url, "https://www.bilibili.com/video/BV1zu4y1y7Sh/?p=2");
+  assert.equal(
+    pack.notes[0].timestampedUrl,
+    "https://www.bilibili.com/video/BV1zu4y1y7Sh/?p=2&t=172",
+  );
 });

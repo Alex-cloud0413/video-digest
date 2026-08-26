@@ -42,7 +42,7 @@ test("every localized options-page key exists", () => {
 test("options page exposes local status and no API-key fields", () => {
   const html = read("options.html");
   assert.match(html, /id="checkConnectionBtn"/);
-  assert.match(html, /YouTube subtitles/);
+  assert.match(html, /YouTube \+ Bilibili subtitles/);
   assert.match(html, /ChatGPT sign-in/);
   assert.doesNotMatch(html, /type="password"/i);
   assert.doesNotMatch(html, /id="(?:supadataApiKey|aiApiKey)"/i);

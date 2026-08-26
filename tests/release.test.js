@@ -6,21 +6,29 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
-test("manifest grants only YouTube and loopback bridge hosts", () => {
+test("manifest grants only supported video and loopback bridge hosts", () => {
   const manifest = JSON.parse(read("manifest.json"));
   const packageJson = JSON.parse(read("package.json"));
 
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.minimum_chrome_version, "116");
   assert.equal(manifest.name, "YouTube Digest + Codex");
-  assert.equal(manifest.version, "1.4.0");
+  assert.equal(manifest.version, "1.5.0");
   assert.equal(packageJson.version, manifest.version);
   assert.deepEqual(manifest.host_permissions.sort(), [
     "http://127.0.0.1:43110/*",
     "https://*.googlevideo.com/*",
+    "https://*.hdslb.com/*",
+    "https://api.bilibili.com/*",
+    "https://www.bilibili.com/*",
     "https://www.youtube.com/*",
   ]);
   assert.ok(!manifest.permissions.includes("activeTab"));
+  assert.ok(
+    manifest.content_scripts.some((entry) =>
+      entry.matches.includes("https://www.bilibili.com/video/*"),
+    ),
+  );
 });
 
 test("runtime uses a generated local capability but no provider API key", () => {
@@ -49,7 +57,7 @@ test("published documentation describes the generic local setup", () => {
   ].join("\n");
 
   assert.match(docs, /Codex/i);
-  assert.match(docs, /YouTube subtitles|YouTube 页面字幕/i);
+  assert.match(docs, /YouTube or Bilibili|YouTube 或哔哩哔哩/i);
   assert.match(docs, /no .*API key|不需要.*API Key|无需 API Key/i);
   assert.match(docs, /Creator Workspace/);
   assert.match(docs, /zarazhangrui\/youtube-digest/);
@@ -79,6 +87,7 @@ test("Create tab exposes the bounded Creator Workspace handoff and browser theme
   assert.match(css, /@media \(prefers-color-scheme: dark\)/);
   assert.match(css, /--bg: #ffffff/);
   assert.match(css, /--bg: #0f0f0f/);
+  assert.match(css, /body\[data-platform="bilibili"\][\s\S]*?#fb7299/i);
   assert.match(js, /action: "sendLearningPack"/);
   assert.match(bridge, /request\.url === "\/v1\/handoff"/);
 });

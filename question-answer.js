@@ -33,14 +33,25 @@
       const sourceText = cleanString(payload?.sourceText, 12_000);
       const question = cleanString(payload?.question, 2_000);
       const videoId = cleanString(payload?.videoId, 32);
+      const platform = cleanString(payload?.platform, 20) || "youtube";
+      const pageNumber = Math.min(
+        10_000,
+        Math.max(1, Math.floor(Number(payload?.pageNumber) || 1)),
+      );
 
       if (!SOURCE_TYPES.has(sourceType)) {
         throw new Error("Question source must be transcript, overview, or note");
       }
       if (!sourceText) throw new Error("Question source text is required");
       if (!question) throw new Error("Question is required");
-      if (!/^[A-Za-z0-9_-]{6,20}$/.test(videoId)) {
-        throw new Error("Question requires a valid YouTube video ID");
+      const validVideoId =
+        platform === "youtube"
+          ? /^[A-Za-z0-9_-]{6,20}$/.test(videoId)
+          : platform === "bilibili"
+            ? /^BV[A-Za-z0-9]{10,18}$/.test(videoId)
+            : false;
+      if (!validVideoId) {
+        throw new Error("Question requires a valid supported video ID");
       }
 
       return {
@@ -51,9 +62,11 @@
         sourceText,
         surroundingContext: cleanString(payload?.surroundingContext, 16_000),
         question,
+        platform,
         videoId,
+        pageNumber,
         videoTitle:
-          cleanString(payload?.videoTitle, 500) || "Untitled YouTube video",
+          cleanString(payload?.videoTitle, 500) || "Untitled video",
         channelName: cleanString(payload?.channelName, 300),
         timestampSeconds: cleanSeconds(payload?.timestampSeconds),
       };
@@ -69,11 +82,23 @@
       const safeAnswer = cleanString(answer, 8_000);
       if (!safeAnswer) throw new Error("Codex answer is required");
       const safeCanonicalUrl = cleanString(canonicalVideoUrl, 500);
-      if (
-        safeCanonicalUrl !==
-        `https://www.youtube.com/watch?v=${normalized.videoId}`
-      ) {
-        throw new Error("Question answer note requires a canonical YouTube URL");
+      let parsedCanonicalUrl;
+      try {
+        parsedCanonicalUrl = new URL(safeCanonicalUrl);
+      } catch {
+        throw new Error("Question answer note requires a canonical video URL");
+      }
+      const isCanonical =
+        normalized.platform === "youtube"
+          ? parsedCanonicalUrl.hostname === "www.youtube.com" &&
+            parsedCanonicalUrl.pathname === "/watch" &&
+            parsedCanonicalUrl.searchParams.get("v") === normalized.videoId
+          : parsedCanonicalUrl.hostname === "www.bilibili.com" &&
+            parsedCanonicalUrl.pathname === `/video/${normalized.videoId}/` &&
+            (normalized.pageNumber === 1 ||
+              parsedCanonicalUrl.searchParams.get("p") === String(normalized.pageNumber));
+      if (!isCanonical) {
+        throw new Error("Question answer note requires a canonical video URL");
       }
 
       const createdAt = Number.isFinite(Number(now)) ? Number(now) : Date.now();
@@ -83,12 +108,22 @@
         noteType: "question_answer",
         sourceType: normalized.sourceType,
         sourceLabel: normalized.sourceLabel,
+        platform: normalized.platform,
         videoId: normalized.videoId,
+        pageNumber: normalized.pageNumber,
         videoTitle: normalized.videoTitle,
         channelName: normalized.channelName,
         timestamp,
         timestampSeconds: normalized.timestampSeconds,
-        timestampedUrl: `${safeCanonicalUrl}&t=${normalized.timestampSeconds}s`,
+        timestampedUrl: (() => {
+          parsedCanonicalUrl.searchParams.set(
+            "t",
+            normalized.platform === "youtube"
+              ? `${normalized.timestampSeconds}s`
+              : String(normalized.timestampSeconds),
+          );
+          return parsedCanonicalUrl.toString();
+        })(),
         question: normalized.question,
         answer: safeAnswer,
         text: `Question\n${normalized.question}\n\nAnswer\n${safeAnswer}`,

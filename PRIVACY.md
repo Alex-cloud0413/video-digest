@@ -4,7 +4,7 @@ YouTube Digest + Codex has no account system, advertising, analytics, or telemet
 
 ## Data processed
 
-The extension reads the active YouTube video's canonical URL, title, channel,
+The extension reads the active YouTube or Bilibili video's canonical URL, title, channel,
 description, duration, and available subtitle track. Generated digests,
 translations, notes, and unfinished Create-page reflection drafts are stored in
 the current Chrome profile.
@@ -31,6 +31,7 @@ not an external provider key and remains in ignored, device-local files.
 ## Network access
 
 - `youtube.com` and `googlevideo.com`: discover and retrieve subtitle tracks exposed by the active YouTube player.
+- `bilibili.com`, `api.bilibili.com`, and `hdslb.com`: read video metadata and subtitle tracks exposed by the active Bilibili page. Existing page cookies stay inside Bilibili requests and are not sent to the local helper.
 - `127.0.0.1:43110`: reach the local Codex helper and optional Creator Workspace handoff.
 - Codex CLI's OpenAI connection: made by the local Codex process using the existing ChatGPT sign-in.
 

@@ -6,7 +6,7 @@ const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 
-function loadHelpers({ fetchImpl = fetch, executeScript } = {}) {
+function loadHelpers({ fetchImpl = fetch, executeScript, pageGlobals } = {}) {
   const listeners = { addListener() {} };
   const sandbox = {
     console,
@@ -48,6 +48,8 @@ function loadHelpers({ fetchImpl = fetch, executeScript } = {}) {
       },
     },
   };
+  Object.assign(sandbox, pageGlobals || {});
+  sandbox.window = sandbox;
   sandbox.globalThis = sandbox;
   vm.runInNewContext(fs.readFileSync(path.join(root, "background.js"), "utf8"), sandbox);
   return sandbox.__YTD_DIRECT_TRANSCRIPT_TESTING__;
@@ -93,6 +95,78 @@ test("legacy XML captions are decoded without a DOM parser", () => {
   );
   assert.equal(transcript[0].text, "Tom & Jerry");
   assert.equal(transcript[0].start, 1.5);
+});
+
+test("Bilibili subtitle JSON becomes seekable transcript rows", () => {
+  const helpers = loadHelpers();
+  const transcript = helpers.parseBilibiliSubtitle(
+    {
+      body: [
+        { from: 1.2, to: 3.8, content: "第一条字幕" },
+        { from: 4, to: 5.5, content: "Second line" },
+      ],
+    },
+    "zh-CN",
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(transcript)), [
+    { text: "第一条字幕", start: 1.2, duration: 2.5999999999999996, language: "zh-CN" },
+    { text: "Second line", start: 4, duration: 1.5, language: "zh-CN" },
+  ]);
+});
+
+test("Bilibili subtitle retrieval runs in the signed-in page context", async () => {
+  const calls = [];
+  const helpers = loadHelpers({
+    fetchImpl: async (url, options) => {
+      calls.push({ url: String(url), options });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          body: [{ from: 2, to: 4.5, content: "Page-context Bilibili captions" }],
+        }),
+      };
+    },
+    pageGlobals: {
+      location: {
+        pathname: "/video/BV1zu4y1y7Sh/",
+      },
+      __INITIAL_STATE__: {
+        videoData: {
+          bvid: "BV1zu4y1y7Sh",
+          cid: 1259322977,
+          title: "Subtitle test",
+          owner: { name: "Test uploader" },
+          duration: 124,
+        },
+      },
+      __playinfo__: {
+        data: {
+          subtitle: {
+            subtitles: [
+              {
+                lan: "zh-CN",
+                lan_doc: "中文（AI生成）",
+                subtitle_url: "//i0.hdslb.com/bfs/subtitle/test.json",
+              },
+            ],
+          },
+        },
+      },
+    },
+  });
+
+  const result = await helpers.getBilibiliTranscriptFromPage(
+    7,
+    "BV1zu4y1y7Sh",
+    1,
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.language, "zh-CN");
+  assert.equal(result.transcript[0].content, "Page-context Bilibili captions");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].options.credentials, "include");
+  assert.match(calls[0].url, /^https:\/\/i0\.hdslb\.com\/bfs\/subtitle\//);
 });
 
 test("subtitle payload fetch runs in the page context and retries JSON3", async () => {

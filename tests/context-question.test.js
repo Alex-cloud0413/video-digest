@@ -17,7 +17,9 @@ const request = {
   sourceText: "A neural network is a function with many adjustable weights.",
   surroundingContext: "The speaker is introducing layers and activations.",
   question: "Why do the weights matter?",
+  platform: "youtube",
   videoId: "aircAruvnKk",
+  pageNumber: 1,
   videoTitle: "But what is a neural network?",
   channelName: "3Blue1Brown",
   timestampSeconds: 172,
@@ -35,7 +37,28 @@ test("focused question requests are bounded and source-aware", () => {
   );
   assert.throws(
     () => normalizeQuestionRequest({ ...request, videoId: "../escape" }),
-    /valid YouTube video ID/,
+    /valid supported video ID/,
+  );
+});
+
+test("focused questions accept Bilibili video sources", () => {
+  const bilibili = normalizeQuestionRequest({
+    ...request,
+    platform: "bilibili",
+    videoId: "BV1zu4y1y7Sh",
+    pageNumber: 2,
+  });
+  assert.equal(bilibili.platform, "bilibili");
+  assert.equal(bilibili.pageNumber, 2);
+  const note = buildQuestionAnswerNote({
+    request: bilibili,
+    answer: "This is a focused answer.",
+    canonicalVideoUrl: "https://www.bilibili.com/video/BV1zu4y1y7Sh/?p=2",
+    now: 123457,
+  });
+  assert.equal(
+    note.timestampedUrl,
+    "https://www.bilibili.com/video/BV1zu4y1y7Sh/?p=2&t=172",
   );
 });
 

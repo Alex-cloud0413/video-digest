@@ -10,10 +10,10 @@ const YTD_OPTIONS = (() => {
       lede:
         "This local-first edition needs no Supadata, DeepSeek, or OpenAI API key.",
       transcriptHeading: "Transcript source",
-      transcriptProvider: "YouTube subtitles",
+      transcriptProvider: "YouTube + Bilibili subtitles",
       noKeyBadge: "No key required",
       transcriptHelp:
-        "The extension reads subtitle tracks already exposed by the active YouTube player. It does not transcribe audio.",
+        "The extension reads subtitle tracks already exposed by the active YouTube or Bilibili player. It does not transcribe audio.",
       aiHeading: "AI provider",
       aiProvider: "Codex through your ChatGPT sign-in",
       subscriptionBadge: "Subscription access",
@@ -47,10 +47,10 @@ const YTD_OPTIONS = (() => {
       heading: "已连接到本机 Codex",
       lede: "这个本地优先版本不需要 Supadata、DeepSeek 或 OpenAI API Key。",
       transcriptHeading: "字幕来源",
-      transcriptProvider: "YouTube 页面字幕",
+      transcriptProvider: "YouTube + 哔哩哔哩页面字幕",
       noKeyBadge: "无需密钥",
       transcriptHelp:
-        "扩展直接读取当前 YouTube 播放器已经提供的字幕轨道，不会转录视频音频。",
+        "扩展直接读取当前 YouTube 或哔哩哔哩播放器已经提供的字幕轨道，不会转录视频音频。",
       aiHeading: "AI 服务",
       aiProvider: "通过 ChatGPT 登录使用 Codex",
       subscriptionBadge: "使用订阅额度",

@@ -1,13 +1,16 @@
 {
   "manifest_version": 3,
   "name": "YouTube Digest + Codex",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "minimum_chrome_version": "116",
-  "description": "Study YouTube with direct subtitles, local Codex features, and reusable Learning Packs.",
+  "description": "Study YouTube and Bilibili with direct subtitles, local Codex features, and reusable Learning Packs.",
   "permissions": ["sidePanel", "storage", "tabs", "scripting"],
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://*.googlevideo.com/*",
+    "https://www.bilibili.com/*",
+    "https://api.bilibili.com/*",
+    "https://*.hdslb.com/*",
     "http://127.0.0.1:43110/*"
   ],
   "action": {
@@ -32,6 +35,11 @@
     {
       "matches": ["https://www.youtube.com/*"],
       "js": ["content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.bilibili.com/video/*"],
+      "js": ["bilibili-content.js"],
       "run_at": "document_idle"
     }
   ],

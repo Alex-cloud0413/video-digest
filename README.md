@@ -2,34 +2,35 @@
 
 [简体中文](README.zh-CN.md)
 
-A local-first Chrome extension that turns subtitle-enabled YouTube videos into
+A local-first Chrome extension that turns subtitle-enabled YouTube and Bilibili videos into
 searchable transcripts, bilingual study views, Codex-generated overviews,
 explanations, timestamped notes, and reusable Learning Packs.
 
 This project is a Codex-powered derivative of
 [zarazhangrui/youtube-digest](https://github.com/zarazhangrui/youtube-digest).
 It keeps the original learning experience while replacing paid transcript and
-LLM API dependencies with YouTube subtitle tracks and the locally installed
+LLM API dependencies with platform-provided subtitle tracks and the locally installed
 Codex CLI.
 
 ## Highlights
 
-- Read subtitle tracks exposed by the active YouTube player.
+- Read subtitle tracks exposed by the active YouTube or Bilibili player.
 - View the original transcript, Simplified Chinese, or an aligned bilingual view.
 - Generate chapters, key quotes, explanations, translations, and polished notes with Codex.
 - Ask focused questions about any transcript passage, Overview item, or saved Note, then save the Codex answer back to Notes.
 - Save timestamped notes and navigate back to the matching point in the video.
 - Use the Create page to combine the source, overview, notes, and your own reflection.
 - Send a bounded Learning Pack to a configurable local Creator Workspace.
-- Follow the browser's light or dark color preference with YouTube-inspired red accents.
+- Follow the browser's light or dark color preference, using YouTube red or Bilibili pink for the active video.
 - Use no Supadata, DeepSeek, or OpenAI API key.
 
-The extension does not transcribe audio. The video must expose a native or
-auto-generated YouTube subtitle track.
+The extension does not transcribe audio. The video must expose a native/automatic
+YouTube track or a Bilibili CC/AI subtitle track. Bilibili may require the video
+page to be signed in before its player exposes subtitles.
 
 ## How it works
 
-The extension reads subtitles from the active YouTube page. AI actions go to a
+The extension reads subtitles from the active video page. AI actions go to a
 loopback-only helper on `127.0.0.1:43110`; the helper invokes the Codex CLI using
 the ChatGPT account already signed in on the computer.
 
@@ -48,7 +49,7 @@ Codex requests count against the limits of the signed-in ChatGPT plan.
 - Google Chrome 116 or newer
 - Node.js 18 or newer
 - The [Codex CLI](https://developers.openai.com/codex/cli) installed and signed in
-- A YouTube video with available captions
+- A YouTube or Bilibili video with available captions
 
 ## Install
 
@@ -65,7 +66,7 @@ Keep the last command running. Then:
 2. Enable **Developer mode**.
 3. Choose **Load unpacked**.
 4. Select this repository's root directory, the folder containing `manifest.json`.
-5. Open a standard YouTube watch page with captions and click the extension icon.
+5. Open a standard YouTube or Bilibili video page with captions and click the extension icon.
 
 For automatic startup, run `node bridge/server.js` with the local process
 manager or login service you trust. Never expose port `43110` beyond loopback.
@@ -88,7 +89,7 @@ You may edit `workspaceRoot` in that local file. **Send to Creator Workspace**
 always writes below:
 
 ```text
-<workspaceRoot>/inbox/youtube-digest/<video-id>/<handoff-id>/
+<workspaceRoot>/inbox/youtube-digest/<platform>-<video-id>[-p<part>]/<handoff-id>/
 ├── learning-pack.json
 └── learning-pack.md
 ```
@@ -99,7 +100,7 @@ and attempts to set `articleIntent` to true.
 
 A Learning Pack contains:
 
-- the canonical YouTube source and metadata;
+- the canonical YouTube or Bilibili source and metadata;
 - the overview, if generated;
 - saved timestamped notes;
 - your own reflection and possible core claim;
@@ -112,7 +113,7 @@ tool-agnostic personal content workflow that can consume these packs.
 
 ## Use
 
-1. Open a captioned YouTube video and click the extension icon.
+1. Open a captioned YouTube or Bilibili video and click the extension icon.
 2. Read or translate the transcript.
 3. Open **Overview** for chapters and key quotes.
 4. Select transcript text for an explanation.
@@ -149,6 +150,7 @@ The upstream project and this derivative use the MIT License. The original
 copyright notice is preserved in [LICENSE](LICENSE), and upstream attribution
 is recorded in [NOTICE.md](NOTICE.md).
 
-YouTube is a trademark of Google LLC. Codex is an OpenAI product. This
+YouTube is a trademark of Google LLC, Bilibili is a trademark of its respective
+owner, and Codex is an OpenAI product. This
 community project is not affiliated with, endorsed by, or sponsored by Google,
-YouTube, or OpenAI.
+YouTube, Bilibili, or OpenAI.

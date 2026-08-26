@@ -32,12 +32,25 @@ var YTD_SETTINGS = (() => {
     return `https://www.youtube.com/watch?v=${normalized}`;
   }
 
+  function canonicalVideoUrl(platform, videoId, pageNumber = 1) {
+    if (globalThis.YTD_PLATFORMS) {
+      return globalThis.YTD_PLATFORMS.canonicalVideoUrl(
+        platform,
+        videoId,
+        pageNumber,
+      );
+    }
+    if (platform !== "youtube") throw new Error("Unsupported video platform.");
+    return canonicalYouTubeUrl(videoId);
+  }
+
   return {
     STORAGE_KEY,
     DEFAULTS,
     normalize,
     bridgeCompletionUrl,
     bridgeHealthUrl,
+    canonicalVideoUrl,
     canonicalYouTubeUrl,
   };
 })();

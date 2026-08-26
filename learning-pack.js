@@ -59,15 +59,32 @@
     }
   }
 
-  function canonicalYouTubeSource(source) {
+  function canonicalVideoSource(source) {
+    const platform = cleanString(source?.platform, 20) || "youtube";
     const videoId = cleanString(source?.videoId, 32);
-    if (!/^[A-Za-z0-9_-]{6,20}$/.test(videoId)) {
-      throw new Error("Learning Pack requires a valid YouTube video ID");
+    const validVideoId =
+      platform === "youtube"
+        ? /^[A-Za-z0-9_-]{6,20}$/.test(videoId)
+        : platform === "bilibili"
+          ? /^BV[A-Za-z0-9]{10,18}$/.test(videoId)
+          : false;
+    if (!validVideoId) {
+      throw new Error("Learning Pack requires a valid supported video ID");
     }
+    const pageNumber = Math.min(
+      10_000,
+      Math.max(1, Math.floor(Number(source?.pageNumber) || 1)),
+    );
+    const url =
+      platform === "youtube"
+        ? `https://www.youtube.com/watch?v=${videoId}`
+        : `https://www.bilibili.com/video/${videoId}/${pageNumber > 1 ? `?p=${pageNumber}` : ""}`;
     return {
+      platform,
       videoId,
-      url: `https://www.youtube.com/watch?v=${videoId}`,
-      title: cleanString(source?.title, 500) || "Untitled YouTube video",
+      pageNumber,
+      url,
+      title: cleanString(source?.title, 500) || "Untitled video",
       channelName: cleanString(source?.channelName, 300),
       language: cleanString(source?.language, 40),
       durationSeconds: cleanSeconds(source?.durationSeconds),
@@ -142,7 +159,14 @@
       rawText: cleanString(note?.rawText, 10_000),
       timestampSeconds,
       timestamp: formatTimestamp(timestampSeconds),
-      timestampedUrl: `${source.url}&t=${timestampSeconds}s`,
+      timestampedUrl: (() => {
+        const url = new URL(source.url);
+        url.searchParams.set(
+          "t",
+          source.platform === "youtube" ? `${timestampSeconds}s` : String(timestampSeconds),
+        );
+        return url.toString();
+      })(),
       createdAt: normalizeIso(note?.createdAt),
     };
   }
@@ -162,10 +186,10 @@
     }
     assertNoTranscriptFields(pack);
     assertExactTopLevelKeys(pack);
-    if (pack.schemaVersion !== 1) {
-      throw new Error("Learning Pack schemaVersion must be 1");
+    if (pack.schemaVersion !== 2) {
+      throw new Error("Learning Pack schemaVersion must be 2");
     }
-    if (pack.kind !== "youtube-learning-pack") {
+    if (pack.kind !== "video-learning-pack") {
       throw new Error("Learning Pack kind is invalid");
     }
     if (pack.state !== "learning_complete") {
@@ -175,7 +199,7 @@
       throw new Error("Learning Pack cannot start an article");
     }
 
-    const source = canonicalYouTubeSource(pack.source);
+    const source = canonicalVideoSource(pack.source);
     const notes = (Array.isArray(pack.notes) ? pack.notes : [])
       .slice(0, 200)
       .map((note) => normalizeNote(note, source))
@@ -183,8 +207,8 @@
     const digest = normalizeDigest(pack.digest);
     const extensionVersion = cleanString(pack.provenance?.extensionVersion, 40);
     return {
-      schemaVersion: 1,
-      kind: "youtube-learning-pack",
+      schemaVersion: 2,
+      kind: "video-learning-pack",
       state: "learning_complete",
       articleIntent: false,
       createdAt: normalizeIso(pack.createdAt),
@@ -213,8 +237,8 @@
   function buildLearningPack(input) {
     const analysis = input?.analysis || null;
     return validateLearningPack({
-      schemaVersion: 1,
-      kind: "youtube-learning-pack",
+      schemaVersion: 2,
+      kind: "video-learning-pack",
       state: "learning_complete",
       articleIntent: false,
       createdAt: input?.createdAt || new Date().toISOString(),
@@ -240,12 +264,21 @@
     });
   }
 
-  function draftStorageKey(videoId) {
+  function draftStorageKey(platformOrVideoId, maybeVideoId, pageNumber = 1) {
+    const platform = maybeVideoId === undefined ? "youtube" : cleanString(platformOrVideoId, 20);
+    const videoId = maybeVideoId === undefined ? platformOrVideoId : maybeVideoId;
     const safeVideoId = cleanString(videoId, 32);
-    if (!/^[A-Za-z0-9_-]{6,20}$/.test(safeVideoId)) {
+    const valid =
+      platform === "youtube"
+        ? /^[A-Za-z0-9_-]{6,20}$/.test(safeVideoId)
+        : platform === "bilibili"
+          ? /^BV[A-Za-z0-9]{10,18}$/.test(safeVideoId)
+          : false;
+    if (!valid) {
       throw new Error("A valid video ID is required for a Learning Pack draft");
     }
-    return `learning_pack_draft_${safeVideoId}`;
+    const safePage = Math.min(10_000, Math.max(1, Math.floor(Number(pageNumber) || 1)));
+    return `learning_pack_draft_${platform}_${safeVideoId}${platform === "bilibili" ? `_p${safePage}` : ""}`;
   }
 
   return {

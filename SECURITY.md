@@ -33,7 +33,7 @@ run `node bridge/generate-config.js`, reload the extension, and restart the help
 
 ## Supported scope
 
-The Chrome manifest permits only YouTube subtitle hosts and the loopback helper.
+The Chrome manifest permits only YouTube/Bilibili video and subtitle hosts plus the loopback helper.
 The helper must never listen on a LAN or public interface. Any change to the
 host, port, origin policy, Codex sandbox, or write-root rules requires a new
 security review.

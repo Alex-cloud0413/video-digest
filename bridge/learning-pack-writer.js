@@ -53,7 +53,7 @@ function renderLearningPackMarkdown(input) {
     "",
     `- State: \`${pack.state}\``,
     `- Article intent: \`${pack.articleIntent}\``,
-    `- Source: [YouTube](${pack.source.url})`,
+    `- Source: [${pack.source.platform === "bilibili" ? "Bilibili" : "YouTube"}](${pack.source.url})`,
     `- Channel: ${pack.source.channelName || "Unknown"}`,
     `- Created: ${pack.createdAt}`,
     "",
@@ -133,7 +133,10 @@ function writeLearningPack(input, options = {}) {
     throw new Error("The Creator Workspace inbox must not be a symbolic link");
   }
   const inboxRoot = fs.realpathSync(configuredRoot);
-  const requestedVideoDirectory = path.join(inboxRoot, pack.source.videoId);
+  const sourceDirectoryName = `${pack.source.platform}-${pack.source.videoId}${
+    pack.source.platform === "bilibili" ? `-p${pack.source.pageNumber}` : ""
+  }`;
+  const requestedVideoDirectory = path.join(inboxRoot, sourceDirectoryName);
   ensureInside(inboxRoot, requestedVideoDirectory);
   fs.mkdirSync(requestedVideoDirectory, { recursive: true, mode: 0o700 });
   if (fs.lstatSync(requestedVideoDirectory).isSymbolicLink()) {

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Alex-cloud0413/youtube-digest-codex/blob/main/creator-workspace-template/learning-pack.schema.json",
-  "title": "YouTube Digest Learning Pack",
+  "title": "Video Digest Learning Pack",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -17,17 +17,19 @@
     "provenance"
   ],
   "properties": {
-    "schemaVersion": { "const": 1 },
-    "kind": { "const": "youtube-learning-pack" },
+    "schemaVersion": { "const": 2 },
+    "kind": { "const": "video-learning-pack" },
     "state": { "const": "learning_complete" },
     "articleIntent": { "const": false },
     "createdAt": { "type": "string", "format": "date-time" },
     "source": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["videoId", "url", "title", "channelName", "language", "durationSeconds"],
+      "required": ["platform", "videoId", "pageNumber", "url", "title", "channelName", "language", "durationSeconds"],
       "properties": {
-        "videoId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{6,20}$" },
+        "platform": { "enum": ["youtube", "bilibili"] },
+        "videoId": { "type": "string", "pattern": "^(?:[A-Za-z0-9_-]{6,20}|BV[A-Za-z0-9]{10,18})$" },
+        "pageNumber": { "type": "integer", "minimum": 1, "maximum": 10000 },
         "url": { "type": "string", "format": "uri" },
         "title": { "type": "string", "maxLength": 500 },
         "channelName": { "type": "string", "maxLength": 300 },
