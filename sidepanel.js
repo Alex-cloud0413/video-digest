@@ -32,6 +32,9 @@ let isAnalysisLoading = false; // Track if analysis is in progress
 let videoTabId = null; // Store the active supported-video tab ID
 let errorAction = null;
 let learningDraftSaveTimer = null;
+let tabCheckGeneration = 0;
+let digestGeneration = 0;
+const DIGEST_CACHE_SCHEMA_VERSION = 2;
 
 // --- Translation state ---
 // The public transcript control intentionally supports only the original
@@ -438,6 +441,7 @@ function setNotesFilter(showAll) {
 // ============================================================
 
 async function checkCurrentTab() {
+  const checkGeneration = ++tabCheckGeneration;
   try {
     let tab = null;
 
@@ -446,6 +450,7 @@ async function checkCurrentTab() {
       active: true,
       lastFocusedWindow: true,
     });
+    if (checkGeneration !== tabCheckGeneration) return;
     if (YTD_PLATFORMS.isSupportedVideoUrl(tabs[0]?.url || "")) {
       tab = tabs[0];
     }
@@ -453,6 +458,7 @@ async function checkCurrentTab() {
     // Strategy 2: Any active YouTube tab
     if (!tab) {
       const activeTabs = await chrome.tabs.query({ active: true });
+      if (checkGeneration !== tabCheckGeneration) return;
       tab = activeTabs.find((candidate) =>
         YTD_PLATFORMS.isSupportedVideoUrl(candidate.url || ""),
       ) || null;
@@ -464,6 +470,7 @@ async function checkCurrentTab() {
         chrome.tabs.query({ url: "https://www.youtube.com/watch*" }),
         chrome.tabs.query({ url: "https://www.bilibili.com/video/*" }),
       ]);
+      if (checkGeneration !== tabCheckGeneration) return;
       tab = candidates.flat()[0] || null;
     }
 
@@ -492,6 +499,7 @@ async function checkCurrentTab() {
           tabId: videoTabId,
           payload: { action: "getVideoInfo" },
         });
+        if (checkGeneration !== tabCheckGeneration) return;
         debugLog("[YouTube Digest Panel] getVideoInfo result:", result);
         if (result.success && result.response) {
           currentVideoTitle = result.response.title || "";
@@ -507,7 +515,7 @@ async function checkCurrentTab() {
         currentVideoDuration = 0;
       }
 
-      startDigest(source.videoId, tab.url, source);
+      await startDigest(source.videoId, tab.url, source);
     } else {
       showState("welcome");
     }
@@ -526,6 +534,7 @@ function extractVideoId(url) {
 // ============================================================
 
 async function startDigest(videoId, videoUrl, source = null) {
+  const requestGeneration = ++digestGeneration;
   const detected = source || YTD_PLATFORMS.detectVideoSource(videoUrl);
   if (detected) {
     currentPlatform = detected.platform;
@@ -548,6 +557,7 @@ async function startDigest(videoId, videoUrl, source = null) {
 
   // Check cache for this video
   const cached = await loadFromCache(videoId);
+  if (requestGeneration !== digestGeneration) return;
   if (cached) {
     debugLog("Loading from cache:", videoId);
     currentVideoId = videoId;
@@ -630,6 +640,24 @@ async function startDigest(videoId, videoUrl, source = null) {
     pageNumber: currentPageNumber,
     tabId: videoTabId,
   });
+  if (
+    requestGeneration !== digestGeneration ||
+    currentContentKey !== nextContentKey
+  ) {
+    return;
+  }
+
+  if (
+    currentPlatform === "bilibili" &&
+    transcriptResult?.success &&
+    transcriptResult.videoInfo?.contentKey !== nextContentKey
+  ) {
+    showError(
+      "Transcript source mismatch",
+      "Bilibili returned subtitles for a different video. Refresh the page and try again.",
+    );
+    return;
+  }
 
   if (!transcriptResult.success) {
     showError(
@@ -1775,6 +1803,8 @@ async function saveToCache(videoId) {
     }
 
     const cacheData = {
+      cacheSchemaVersion: DIGEST_CACHE_SCHEMA_VERSION,
+      contentKey: currentContentKey,
       analysis: currentAnalysis, // May be null if not yet analyzed
       transcript: currentTranscript,
       transcriptText: currentTranscriptText,
@@ -1868,6 +1898,21 @@ async function loadFromCache(videoId) {
     const cached = cacheKeys.map((key) => result[key]).find(Boolean);
 
     if (!cached) return null;
+
+    const expectedContentKey =
+      currentPlatform === "youtube"
+        ? `youtube:${videoId}`
+        : `bilibili:${videoId}:p${currentPageNumber}`;
+    if (
+      currentPlatform === "bilibili" &&
+      (cached.cacheSchemaVersion !== DIGEST_CACHE_SCHEMA_VERSION ||
+        cached.contentKey !== expectedContentKey)
+    ) {
+      // Invalidate only derived digest data from builds that could bind a
+      // stale Bilibili player global. Timestamped Notes use separate keys.
+      await chrome.storage.local.remove(cacheKeys);
+      return null;
+    }
 
     // Cache expires after 30 days
     const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;

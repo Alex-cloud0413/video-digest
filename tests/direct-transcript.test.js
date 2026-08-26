@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const platforms = require("../platforms.js");
 
 const root = path.resolve(__dirname, "..");
 
@@ -23,6 +24,7 @@ function loadHelpers({ fetchImpl = fetch, executeScript, pageGlobals } = {}) {
       normalize: () => ({ provider: "codex-local", aiModel: "subscription" }),
       canonicalYouTubeUrl: (videoId) => `https://www.youtube.com/watch?v=${videoId}`,
     },
+    YTD_PLATFORMS: platforms,
     YTD_LOCAL_BRIDGE: {
       baseUrl: "http://127.0.0.1:43110",
       token: "test-token",
@@ -114,24 +116,76 @@ test("Bilibili subtitle JSON becomes seekable transcript rows", () => {
   ]);
 });
 
-test("Bilibili subtitle discovery runs in the signed-in page context", async () => {
+test("Bilibili metadata binds the requested video part to one cid", async () => {
   const calls = [];
   const helpers = loadHelpers({
     fetchImpl: async (url, options) => {
       calls.push({ url: String(url), options });
-      throw new Error("subtitle files must not be fetched in the page context");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 0,
+          data: {
+            bvid: "BV1zu4y1y7Sh",
+            cid: 100,
+            title: "Current video",
+            owner: { name: "Current uploader" },
+            pages: [
+              { page: 1, cid: 100, duration: 40 },
+              { page: 2, cid: 200, duration: 50 },
+            ],
+          },
+        }),
+      };
+    },
+  });
+
+  const metadata = await helpers.fetchBilibiliVideoMetadata(
+    "BV1zu4y1y7Sh",
+    2,
+  );
+  assert.equal(metadata.cid, 200);
+  assert.equal(metadata.contentKey, "bilibili:BV1zu4y1y7Sh:p2");
+  assert.equal(calls.length, 1);
+  assert.equal(new URL(calls[0].url).searchParams.get("bvid"), "BV1zu4y1y7Sh");
+  assert.equal(calls[0].options.credentials, "omit");
+});
+
+test("Bilibili subtitle discovery ignores stale page globals", async () => {
+  const calls = [];
+  const helpers = loadHelpers({
+    fetchImpl: async (url, options) => {
+      calls.push({ url: String(url), options });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 0,
+          data: {
+            subtitle: {
+              subtitles: [
+                {
+                  lan: "zh-CN",
+                  lan_doc: "中文（AI生成）",
+                  subtitle_url: "//i0.hdslb.com/bfs/subtitle/current.json",
+                },
+              ],
+            },
+          },
+        }),
+      };
     },
     pageGlobals: {
       location: {
         pathname: "/video/BV1zu4y1y7Sh/",
+        href: "https://www.bilibili.com/video/BV1zu4y1y7Sh/",
       },
       __INITIAL_STATE__: {
         videoData: {
-          bvid: "BV1zu4y1y7Sh",
-          cid: 1259322977,
-          title: "Subtitle test",
-          owner: { name: "Test uploader" },
-          duration: 124,
+          bvid: "BV1OLDVIDEO0",
+          cid: 999,
+          title: "Stale video",
         },
       },
       __playinfo__: {
@@ -141,7 +195,7 @@ test("Bilibili subtitle discovery runs in the signed-in page context", async () 
               {
                 lan: "zh-CN",
                 lan_doc: "中文（AI生成）",
-                subtitle_url: "//i0.hdslb.com/bfs/subtitle/test.json",
+                subtitle_url: "//i0.hdslb.com/bfs/subtitle/stale.json",
               },
             ],
           },
@@ -150,15 +204,28 @@ test("Bilibili subtitle discovery runs in the signed-in page context", async () 
     },
   });
 
-  const result = await helpers.getBilibiliSubtitleTrackFromPage(
-    7,
-    "BV1zu4y1y7Sh",
-    1,
-  );
+  const result = await helpers.getBilibiliSubtitleTrackFromPage(7, {
+    videoId: "BV1zu4y1y7Sh",
+    pageNumber: 1,
+    contentKey: "bilibili:BV1zu4y1y7Sh:p1",
+    cid: 1259322977,
+    title: "Current video",
+    channelName: "Current uploader",
+    description: "",
+    duration: 124,
+  });
   assert.equal(result.ok, true);
   assert.equal(result.language, "zh-CN");
-  assert.match(result.subtitleUrl, /^https:\/\/i0\.hdslb\.com\/bfs\/subtitle\//);
-  assert.equal(calls.length, 0);
+  assert.equal(
+    result.subtitleUrl,
+    "https://i0.hdslb.com/bfs/subtitle/current.json",
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(
+    new URL(calls[0].url).searchParams.get("cid"),
+    "1259322977",
+  );
+  assert.equal(calls[0].options.credentials, "include");
 });
 
 test("Bilibili subtitle payload downloads in the extension worker", async () => {

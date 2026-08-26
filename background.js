@@ -25,6 +25,7 @@ const CREATOR_WORKSPACE_HANDOFF_TIMEOUT_MS = 15_000;
 const CREATOR_WORKSPACE_HANDOFF_MAX_RESPONSE_BYTES = 64 * 1024;
 const BILIBILI_SUBTITLE_TIMEOUT_MS = 15_000;
 const BILIBILI_SUBTITLE_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+const BILIBILI_METADATA_TIMEOUT_MS = 15_000;
 const debugLog = (...args) => {
   if (DEBUG) console.log(...args);
 };
@@ -1011,6 +1012,65 @@ async function findBilibiliTabForVideo(videoId, requestedTabId) {
   return tabs.find(matches) || null;
 }
 
+async function fetchBilibiliVideoMetadata(videoId, pageNumber) {
+  const safeVideoId = YTD_PLATFORMS.cleanVideoId("bilibili", videoId);
+  const safePageNumber = YTD_PLATFORMS.cleanPageNumber(pageNumber);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    BILIBILI_METADATA_TIMEOUT_MS,
+  );
+  try {
+    const url = new URL("https://api.bilibili.com/x/web-interface/view");
+    url.searchParams.set("bvid", safeVideoId);
+    const response = await fetch(url.toString(), {
+      credentials: "omit",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`Bilibili video metadata failed (${response.status})`);
+    }
+    const payload = await response.json();
+    if (payload?.code !== 0) {
+      throw new Error(payload?.message || "Bilibili video metadata is unavailable");
+    }
+    const video = payload.data || {};
+    if (video.bvid !== safeVideoId) {
+      throw new Error("Bilibili returned metadata for a different video");
+    }
+    const pages = Array.isArray(video.pages) ? video.pages : [];
+    const selectedPage = pages.find(
+      (item) => Number(item?.page) === safePageNumber,
+    );
+    if (pages.length && !selectedPage) {
+      throw new Error("The requested Bilibili video part is unavailable");
+    }
+    const cid = Number(selectedPage?.cid || (safePageNumber === 1 ? video.cid : 0));
+    if (!Number.isSafeInteger(cid) || cid <= 0) {
+      throw new Error("Bilibili video part ID is unavailable");
+    }
+    return {
+      videoId: safeVideoId,
+      pageNumber: safePageNumber,
+      contentKey: `bilibili:${safeVideoId}:p${safePageNumber}`,
+      cid,
+      title: String(video.title || ""),
+      channelName: String(video.owner?.name || ""),
+      description: String(video.desc || ""),
+      duration:
+        Number(selectedPage?.duration || (safePageNumber === 1 ? video.duration : 0)) || 0,
+    };
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("Bilibili video metadata timed out after 15 seconds");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 function normalizeBilibiliSubtitleUrl(value) {
   const raw = String(value || "").trim();
   if (!raw) return null;
@@ -1076,12 +1136,12 @@ async function fetchBilibiliSubtitlePayload(subtitleUrl) {
   }
 }
 
-async function getBilibiliSubtitleTrackFromPage(tabId, videoId, pageNumber) {
+async function getBilibiliSubtitleTrackFromPage(tabId, metadata) {
   const results = await chrome.scripting.executeScript({
     target: { tabId },
     world: "MAIN",
-    args: [videoId, Math.max(1, Math.floor(Number(pageNumber) || 1))],
-    func: async (expectedBvid, expectedPage) => {
+    args: [metadata],
+    func: async (expected) => {
       const response = {
         ok: false,
         subtitleUrl: null,
@@ -1090,55 +1150,51 @@ async function getBilibiliSubtitleTrackFromPage(tabId, videoId, pageNumber) {
         error: "Bilibili page did not return subtitle data",
       };
       try {
+        const expectedBvid = expected?.videoId;
+        const expectedPage = Math.max(1, Math.floor(Number(expected?.pageNumber) || 1));
+        const expectedCid = Number(expected?.cid);
         const urlMatch = location.pathname.match(/^\/video\/(BV[A-Za-z0-9]{10,18})/i);
-        if (!urlMatch || urlMatch[1] !== expectedBvid) {
+        const activePage = Math.max(
+          1,
+          Math.floor(Number(new URL(location.href).searchParams.get("p")) || 1),
+        );
+        if (
+          !urlMatch ||
+          urlMatch[1] !== expectedBvid ||
+          activePage !== expectedPage ||
+          !Number.isSafeInteger(expectedCid) ||
+          expectedCid <= 0
+        ) {
           response.error = "The active Bilibili tab changed videos";
           return response;
         }
-        const initial = window.__INITIAL_STATE__?.videoData || {};
-        let title = initial.title || "";
-        let channelName = initial.owner?.name || "";
-        let description = initial.desc || "";
-        let duration = Number(initial.duration) || 0;
-        let cid =
-          initial.pages?.find((item) => Number(item.page) === expectedPage)?.cid ||
-          (expectedPage === 1 ? initial.cid : null);
-        if (!cid) {
-          const metadataResponse = await fetch(
-            `https://api.bilibili.com/x/web-interface/view?bvid=${encodeURIComponent(expectedBvid)}`,
-            { credentials: "include", cache: "no-store" },
-          );
-          const metadata = await metadataResponse.json();
-          if (metadata?.code !== 0) throw new Error(metadata?.message || "Video metadata unavailable");
-          const video = metadata.data || {};
-          cid =
-            video.pages?.find((item) => Number(item.page) === expectedPage)?.cid ||
-            video.cid;
-          title ||= video.title || "";
-          channelName ||= video.owner?.name || "";
-          description ||= video.desc || "";
-          duration ||= Number(video.pages?.find((item) => Number(item.page) === expectedPage)?.duration || video.duration) || 0;
-        }
-        if (!cid) throw new Error("Bilibili video part ID is unavailable");
-
-        const playInfoCandidates = [
-          window.__playinfo__?.data,
-          window.__playinfo__,
-        ].filter(Boolean);
-        let playerData = playInfoCandidates.find(
-          (data) => Array.isArray(data?.subtitle?.subtitles) && data.subtitle.subtitles.length,
+        // Never trust __playinfo__ here. Bilibili retains that global while
+        // navigating between videos, so it can describe the previous page.
+        const playerResponse = await fetch(
+          `https://api.bilibili.com/x/player/v2?bvid=${encodeURIComponent(expectedBvid)}&cid=${encodeURIComponent(expectedCid)}`,
+          { credentials: "include", cache: "no-store" },
         );
-        if (!playerData) {
-          const playerResponse = await fetch(
-            `https://api.bilibili.com/x/player/v2?bvid=${encodeURIComponent(expectedBvid)}&cid=${encodeURIComponent(cid)}`,
-            { credentials: "include", cache: "no-store" },
-          );
-          const playerPayload = await playerResponse.json();
-          if (playerPayload?.code !== 0) {
-            throw new Error(playerPayload?.message || "Player metadata unavailable");
-          }
-          playerData = playerPayload.data || {};
-          response.needsLogin = playerData.need_login_subtitle === true;
+        const playerPayload = await playerResponse.json();
+        if (playerPayload?.code !== 0) {
+          throw new Error(playerPayload?.message || "Player metadata unavailable");
+        }
+        const playerData = playerPayload.data || {};
+        response.needsLogin = playerData.need_login_subtitle === true;
+
+        const afterFetchMatch = location.pathname.match(
+          /^\/video\/(BV[A-Za-z0-9]{10,18})/i,
+        );
+        const afterFetchPage = Math.max(
+          1,
+          Math.floor(Number(new URL(location.href).searchParams.get("p")) || 1),
+        );
+        if (
+          !afterFetchMatch ||
+          afterFetchMatch[1] !== expectedBvid ||
+          afterFetchPage !== expectedPage
+        ) {
+          response.error = "The active Bilibili tab changed videos";
+          return response;
         }
         const tracks = Array.isArray(playerData?.subtitle?.subtitles)
           ? playerData.subtitle.subtitles
@@ -1157,7 +1213,7 @@ async function getBilibiliSubtitleTrackFromPage(tabId, videoId, pageNumber) {
           response.error = response.needsLogin
             ? "Bilibili did not expose a subtitle track. Sign in, reload this video, and make sure the player has a CC/字幕 option. Captions baked into the picture cannot be extracted."
             : "This video does not expose a CC/AI subtitle track. Captions baked into the picture cannot be extracted as transcript data.";
-          return { ...response, title, channelName, description, duration, cid };
+          return { ...response, ...expected };
         }
         const subtitleUrl = new URL(
           preferred.subtitle_url.startsWith("//")
@@ -1173,7 +1229,7 @@ async function getBilibiliSubtitleTrackFromPage(tabId, videoId, pageNumber) {
         response.ok = true;
         response.language = preferred.lan || preferred.lan_doc || null;
         response.subtitleUrl = subtitleUrl.toString();
-        return { ...response, title, channelName, description, duration, cid };
+        return { ...response, ...expected };
       } catch (error) {
         response.error =
           error?.message === "Failed to fetch"
@@ -1201,11 +1257,17 @@ async function handleFetchBilibiliTranscript(source) {
       message: "Open this video in a standard Bilibili video tab and try again.",
     };
   }
-  const pageResult = await getBilibiliSubtitleTrackFromPage(
-    tab.id,
-    videoId,
-    pageNumber,
-  );
+  let metadata;
+  try {
+    metadata = await fetchBilibiliVideoMetadata(videoId, pageNumber);
+  } catch (error) {
+    return {
+      success: false,
+      error: "BILIBILI_METADATA_FAILED",
+      message: error?.message || "Bilibili video metadata is unavailable.",
+    };
+  }
+  const pageResult = await getBilibiliSubtitleTrackFromPage(tab.id, metadata);
   if (!pageResult.ok || !pageResult.subtitleUrl) {
     return {
       success: false,
@@ -1241,6 +1303,10 @@ async function handleFetchBilibiliTranscript(source) {
   return {
     ...buildTranscriptResult(transcript, pageResult.language),
     videoInfo: {
+      platform: "bilibili",
+      videoId,
+      pageNumber,
+      contentKey: metadata.contentKey,
       title: pageResult.title || "",
       channelName: pageResult.channelName || "",
       description: pageResult.description || "",
@@ -2242,6 +2308,7 @@ globalThis.__YTD_DIRECT_TRANSCRIPT_TESTING__ = {
   cleanCaptionText,
   decodeXmlEntities,
   fetchBilibiliSubtitlePayload,
+  fetchBilibiliVideoMetadata,
   fetchCaptionPayloadInPage,
   getBilibiliSubtitleTrackFromPage,
   normalizeBilibiliSubtitleUrl,
