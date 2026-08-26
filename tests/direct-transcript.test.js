@@ -114,18 +114,12 @@ test("Bilibili subtitle JSON becomes seekable transcript rows", () => {
   ]);
 });
 
-test("Bilibili subtitle retrieval runs in the signed-in page context", async () => {
+test("Bilibili subtitle discovery runs in the signed-in page context", async () => {
   const calls = [];
   const helpers = loadHelpers({
     fetchImpl: async (url, options) => {
       calls.push({ url: String(url), options });
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({
-          body: [{ from: 2, to: 4.5, content: "Page-context Bilibili captions" }],
-        }),
-      };
+      throw new Error("subtitle files must not be fetched in the page context");
     },
     pageGlobals: {
       location: {
@@ -156,17 +150,57 @@ test("Bilibili subtitle retrieval runs in the signed-in page context", async () 
     },
   });
 
-  const result = await helpers.getBilibiliTranscriptFromPage(
+  const result = await helpers.getBilibiliSubtitleTrackFromPage(
     7,
     "BV1zu4y1y7Sh",
     1,
   );
   assert.equal(result.ok, true);
   assert.equal(result.language, "zh-CN");
-  assert.equal(result.transcript[0].content, "Page-context Bilibili captions");
+  assert.match(result.subtitleUrl, /^https:\/\/i0\.hdslb\.com\/bfs\/subtitle\//);
+  assert.equal(calls.length, 0);
+});
+
+test("Bilibili subtitle payload downloads in the extension worker", async () => {
+  const calls = [];
+  const helpers = loadHelpers({
+    fetchImpl: async (url, options) => {
+      calls.push({ url: String(url), options });
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            body: [{ from: 2, to: 4.5, content: "Worker-fetched captions" }],
+          }),
+      };
+    },
+  });
+
+  const payload = await helpers.fetchBilibiliSubtitlePayload(
+    "https://i0.hdslb.com/bfs/subtitle/test.json",
+  );
+  assert.equal(payload.body[0].content, "Worker-fetched captions");
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].options.credentials, "include");
-  assert.match(calls[0].url, /^https:\/\/i0\.hdslb\.com\/bfs\/subtitle\//);
+  assert.equal(calls[0].options.credentials, "omit");
+});
+
+test("Bilibili subtitle worker rejects non-subtitle CDN paths", async () => {
+  let fetchCount = 0;
+  const helpers = loadHelpers({
+    fetchImpl: async () => {
+      fetchCount += 1;
+      throw new Error("must not fetch");
+    },
+  });
+
+  await assert.rejects(
+    helpers.fetchBilibiliSubtitlePayload(
+      "https://i0.hdslb.com/bfs/archive/video-file.m4s",
+    ),
+    /unsupported subtitle URL/,
+  );
+  assert.equal(fetchCount, 0);
 });
 
 test("subtitle payload fetch runs in the page context and retries JSON3", async () => {

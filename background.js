@@ -23,6 +23,8 @@ const AI_PROVIDER_HARD_TIMEOUT_MS = 185_000;
 const AI_PROVIDER_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const CREATOR_WORKSPACE_HANDOFF_TIMEOUT_MS = 15_000;
 const CREATOR_WORKSPACE_HANDOFF_MAX_RESPONSE_BYTES = 64 * 1024;
+const BILIBILI_SUBTITLE_TIMEOUT_MS = 15_000;
+const BILIBILI_SUBTITLE_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 const debugLog = (...args) => {
   if (DEBUG) console.log(...args);
 };
@@ -1009,7 +1011,72 @@ async function findBilibiliTabForVideo(videoId, requestedTabId) {
   return tabs.find(matches) || null;
 }
 
-async function getBilibiliTranscriptFromPage(tabId, videoId, pageNumber) {
+function normalizeBilibiliSubtitleUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  let subtitleUrl;
+  try {
+    subtitleUrl = new URL(raw.startsWith("//") ? `https:${raw}` : raw);
+  } catch {
+    return null;
+  }
+  const allowedHost =
+    subtitleUrl.hostname === "i0.hdslb.com" ||
+    subtitleUrl.hostname.endsWith(".hdslb.com");
+  const allowedPath =
+    subtitleUrl.pathname.startsWith("/bfs/subtitle/") ||
+    subtitleUrl.pathname.startsWith("/bfs/ai_subtitle/");
+  return subtitleUrl.protocol === "https:" && allowedHost && allowedPath
+    ? subtitleUrl.toString()
+    : null;
+}
+
+async function fetchBilibiliSubtitlePayload(subtitleUrl) {
+  const safeUrl = normalizeBilibiliSubtitleUrl(subtitleUrl);
+  if (!safeUrl) {
+    throw new Error("Bilibili returned an unsupported subtitle URL");
+  }
+  const controller = new AbortController();
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    BILIBILI_SUBTITLE_TIMEOUT_MS,
+  );
+  try {
+    // This fetch intentionally runs in the extension service worker. Bilibili's
+    // CDN subtitle files do not consistently allow page-origin CORS requests,
+    // while the manifest grants this worker access to the tightly validated
+    // *.hdslb.com subtitle path above.
+    const response = await fetch(safeUrl, {
+      credentials: "omit",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`Bilibili subtitle download failed (${response.status})`);
+    }
+    const payloadText = await response.text();
+    if (
+      new TextEncoder().encode(payloadText).byteLength >
+      BILIBILI_SUBTITLE_MAX_RESPONSE_BYTES
+    ) {
+      throw new Error("Bilibili subtitle response exceeded the 8 MiB limit");
+    }
+    try {
+      return JSON.parse(payloadText);
+    } catch {
+      throw new Error("Bilibili returned invalid subtitle data");
+    }
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("Bilibili subtitle download timed out after 15 seconds");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function getBilibiliSubtitleTrackFromPage(tabId, videoId, pageNumber) {
   const results = await chrome.scripting.executeScript({
     target: { tabId },
     world: "MAIN",
@@ -1017,7 +1084,7 @@ async function getBilibiliTranscriptFromPage(tabId, videoId, pageNumber) {
     func: async (expectedBvid, expectedPage) => {
       const response = {
         ok: false,
-        transcript: [],
+        subtitleUrl: null,
         language: null,
         needsLogin: false,
         error: "Bilibili page did not return subtitle data",
@@ -1088,8 +1155,8 @@ async function getBilibiliTranscriptFromPage(tabId, videoId, pageNumber) {
         })[0];
         if (!preferred?.subtitle_url) {
           response.error = response.needsLogin
-            ? "Bilibili requires a signed-in page before it exposes this subtitle track"
-            : "This Bilibili video does not expose an available CC or AI subtitle track";
+            ? "Bilibili did not expose a subtitle track. Sign in, reload this video, and make sure the player has a CC/字幕 option. Captions baked into the picture cannot be extracted."
+            : "This video does not expose a CC/AI subtitle track. Captions baked into the picture cannot be extracted as transcript data.";
           return { ...response, title, channelName, description, duration, cid };
         }
         const subtitleUrl = new URL(
@@ -1103,27 +1170,22 @@ async function getBilibiliTranscriptFromPage(tabId, videoId, pageNumber) {
         ) {
           throw new Error("Bilibili returned an unsupported subtitle host");
         }
-        const subtitleResponse = await fetch(subtitleUrl.toString(), {
-          credentials: "include",
-          cache: "no-store",
-        });
-        if (!subtitleResponse.ok) throw new Error(`Subtitle request failed (${subtitleResponse.status})`);
-        const subtitle = await subtitleResponse.json();
         response.ok = true;
         response.language = preferred.lan || preferred.lan_doc || null;
-        response.transcript = (Array.isArray(subtitle?.body) ? subtitle.body : [])
-          .slice(0, 50_000)
-          .map((entry) => ({ from: entry?.from, to: entry?.to, content: entry?.content }));
+        response.subtitleUrl = subtitleUrl.toString();
         return { ...response, title, channelName, description, duration, cid };
       } catch (error) {
-        response.error = error?.message || response.error;
+        response.error =
+          error?.message === "Failed to fetch"
+            ? "Bilibili blocked the signed-in subtitle lookup. Reload the video page and try again."
+            : error?.message || response.error;
         return response;
       }
     },
   });
   return results[0]?.result || {
     ok: false,
-    transcript: [],
+    subtitleUrl: null,
     error: "Bilibili page returned no subtitle result",
   };
 }
@@ -1139,22 +1201,41 @@ async function handleFetchBilibiliTranscript(source) {
       message: "Open this video in a standard Bilibili video tab and try again.",
     };
   }
-  const pageResult = await getBilibiliTranscriptFromPage(
+  const pageResult = await getBilibiliSubtitleTrackFromPage(
     tab.id,
     videoId,
     pageNumber,
   );
-  const transcript = parseBilibiliSubtitle(
-    { body: pageResult.transcript },
-    pageResult.language,
-  );
-  if (!pageResult.ok || !transcript.length) {
+  if (!pageResult.ok || !pageResult.subtitleUrl) {
     return {
       success: false,
       error: pageResult.needsLogin ? "BILIBILI_LOGIN_REQUIRED" : "NO_TRANSCRIPT",
       message:
         pageResult.error ||
         "Bilibili did not expose an available CC or AI subtitle track.",
+    };
+  }
+  let subtitlePayload;
+  try {
+    subtitlePayload = await fetchBilibiliSubtitlePayload(pageResult.subtitleUrl);
+  } catch (error) {
+    return {
+      success: false,
+      error: "BILIBILI_SUBTITLE_DOWNLOAD_FAILED",
+      message:
+        error?.message ||
+        "Bilibili exposed a subtitle track, but its subtitle file could not be downloaded.",
+    };
+  }
+  const transcript = parseBilibiliSubtitle(
+    subtitlePayload,
+    pageResult.language,
+  );
+  if (!transcript.length) {
+    return {
+      success: false,
+      error: "NO_TRANSCRIPT",
+      message: "Bilibili returned an empty subtitle track for this video.",
     };
   }
   return {
@@ -2160,8 +2241,10 @@ globalThis.__YTD_DIRECT_TRANSCRIPT_TESTING__ = {
   buildTranscriptResult,
   cleanCaptionText,
   decodeXmlEntities,
+  fetchBilibiliSubtitlePayload,
   fetchCaptionPayloadInPage,
-  getBilibiliTranscriptFromPage,
+  getBilibiliSubtitleTrackFromPage,
+  normalizeBilibiliSubtitleUrl,
   getTranscriptRowsFromYouTubePanel,
   parseBilibiliSubtitle,
   parseYouTubeCaptionPayload,
