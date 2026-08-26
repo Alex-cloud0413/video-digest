@@ -31,10 +31,80 @@ let currentVideoDuration = 0;
 let isAnalysisLoading = false; // Track if analysis is in progress
 let videoTabId = null; // Store the active supported-video tab ID
 let errorAction = null;
+let errorLocalization = null;
 let learningDraftSaveTimer = null;
 let tabCheckGeneration = 0;
 let digestGeneration = 0;
 const DIGEST_CACHE_SCHEMA_VERSION = 2;
+let currentInterfaceLanguage = "en";
+
+function t(key, variables = {}) {
+  return globalThis.VIDEO_DIGEST_I18N?.translate(
+    currentInterfaceLanguage,
+    key,
+    variables,
+  ) || key;
+}
+
+function updateLanguageButton() {
+  const i18n = globalThis.VIDEO_DIGEST_I18N;
+  const button = document.getElementById("languageBtn");
+  const label = document.getElementById("languageBtnLabel");
+  if (!i18n || !button || !label) return;
+  const languageNames = { en: "English", "zh-CN": "中文", de: "Deutsch" };
+  label.textContent = i18n.LANGUAGE_BADGES[currentInterfaceLanguage] || "EN";
+  const description = t("switchLanguage", {
+    language: languageNames[currentInterfaceLanguage] || "English",
+  });
+  button.title = description;
+  button.setAttribute("aria-label", description);
+}
+
+function refreshLocalizedDynamicUi() {
+  if (document.getElementById("errorState")?.style.display !== "none") {
+    renderLocalizedError();
+  }
+  if (currentTranscript) {
+    if (currentTranscriptMode === "original") renderTranscript();
+    else translateTranscript();
+    setupExplainFeature();
+  }
+  if (currentAnalysis) renderAnalysisResults(currentAnalysis);
+  if (document.querySelector('[data-panel="notes"]')?.classList.contains("active")) {
+    const showAll = document
+      .getElementById("notesFilterAll")
+      ?.classList.contains("active");
+    loadNotes(showAll ? null : currentVideoId);
+  }
+}
+
+async function setInterfaceLanguage(nextLanguage, { persist = true, refresh = true } = {}) {
+  const i18n = globalThis.VIDEO_DIGEST_I18N;
+  if (!i18n) return;
+  currentInterfaceLanguage = i18n.applyDocument(nextLanguage, document);
+  updateLanguageButton();
+  if (persist) {
+    await chrome.storage.local.set({
+      [i18n.STORAGE_KEY]: currentInterfaceLanguage,
+    });
+  }
+  if (refresh) refreshLocalizedDynamicUi();
+}
+
+async function initializeInterfaceLanguage() {
+  const i18n = globalThis.VIDEO_DIGEST_I18N;
+  if (!i18n) return;
+  const stored = await chrome.storage.local.get(i18n.STORAGE_KEY).catch(() => ({}));
+  await setInterfaceLanguage(stored[i18n.STORAGE_KEY] || "en", {
+    persist: false,
+    refresh: false,
+  });
+  document.getElementById("languageBtn")?.addEventListener("click", async () => {
+    const languages = i18n.SUPPORTED_LANGUAGES;
+    const index = languages.indexOf(currentInterfaceLanguage);
+    await setInterfaceLanguage(languages[(index + 1) % languages.length]);
+  });
+}
 
 // --- Translation state ---
 // The public transcript control intentionally supports only the original
@@ -67,7 +137,7 @@ function sendTranslationMessage(message) {
       finish(
         reject,
         new Error(
-          "Translation request timed out after 190 seconds. Please Retry.",
+          t("translationTimeout"),
         ),
       );
     }, TRANSLATION_MESSAGE_TIMEOUT_MS);
@@ -237,6 +307,7 @@ function groupTranscriptEntries(entries, limits = TRANSCRIPT_SEGMENT_LIMITS) {
 // ============================================================
 
 document.addEventListener("DOMContentLoaded", async () => {
+  await initializeInterfaceLanguage();
   setupEventListeners();
   await evictOldCacheEntries(20);
 
@@ -529,6 +600,21 @@ function extractVideoId(url) {
   return YTD_PLATFORMS.detectVideoSource(url)?.videoId || null;
 }
 
+function transcriptFailureLocalization(result = {}) {
+  const keyByCode = {
+    VIDEO_TAB_NOT_FOUND: "videoTabNotFound",
+    BILIBILI_LOGIN_REQUIRED: "bilibiliLoginRequired",
+    NO_TRANSCRIPT: "noTranscriptAvailable",
+    BILIBILI_METADATA_FAILED: "bilibiliMetadataFailed",
+    BILIBILI_SUBTITLE_DOWNLOAD_FAILED: "bilibiliSubtitleDownloadFailed",
+  };
+  const key = keyByCode[result.error];
+  return {
+    messageKey: key || null,
+    message: key ? t(key) : result.message || result.error || t("errorFallback"),
+  };
+}
+
 // ============================================================
 // DIGEST PIPELINE
 // ============================================================
@@ -631,7 +717,7 @@ async function startDigest(videoId, videoUrl, source = null) {
   }
 
   showState("loading");
-  updateLoading("Fetching transcript", "");
+  updateLoading(t("fetchingTranscript"), t("extractingCaptions"));
 
   const transcriptResult = await chrome.runtime.sendMessage({
     action: "fetchTranscript",
@@ -653,17 +739,25 @@ async function startDigest(videoId, videoUrl, source = null) {
     transcriptResult.videoInfo?.contentKey !== nextContentKey
   ) {
     showError(
-      "Transcript source mismatch",
-      "Bilibili returned subtitles for a different video. Refresh the page and try again.",
+      t("sourceMismatchTitle"),
+      t("sourceMismatchMessage"),
+      {
+        titleKey: "sourceMismatchTitle",
+        messageKey: "sourceMismatchMessage",
+        buttonKey: "tryAgain",
+      },
     );
     return;
   }
 
   if (!transcriptResult.success) {
-    showError(
-      "No transcript found",
-      transcriptResult.message || transcriptResult.error,
-    );
+    const failure = transcriptFailureLocalization(transcriptResult);
+    showError(t("noTranscriptTitle"), failure.message, {
+      titleKey: "noTranscriptTitle",
+      messageKey: failure.messageKey,
+      fallbackMessage: failure.message,
+      buttonKey: "tryAgain",
+    });
     return;
   }
 
@@ -722,7 +816,7 @@ function renderAnalysisResults(analysis) {
         <span class="chapter-title">${escapeHtml(chapter.title)}</span>
         <span class="chapter-summary">${escapeHtml(chapter.summary || "")}</span>
         <div class="chapter-actions">
-          <button class="context-ask-btn" type="button" title="Ask Codex about this chapter">✦ Ask</button>
+          <button class="context-ask-btn" type="button" title="${escapeHtml(t("askChapterTitle"))}">✦ ${escapeHtml(t("ask"))}</button>
         </div>
       </div>
     `;
@@ -736,7 +830,7 @@ function renderAnalysisResults(analysis) {
     });
     attachContextAskButton(li, {
       sourceType: "overview",
-      sourceLabel: "Overview chapter",
+      sourceLabel: t("sourceOverviewChapter"),
       sourceText: [chapter.title, chapter.summary].filter(Boolean).join("\n"),
       surroundingContext: getTranscriptContextAtTime(chapter.timestampSeconds),
       videoId: currentVideoId,
@@ -762,9 +856,9 @@ function renderAnalysisResults(analysis) {
       <div class="quote-meta">
         <span class="quote-timestamp">${escapeHtml(quote.timestamp)}</span>
         <div class="quote-actions">
-          <button class="context-ask-btn" type="button" title="Ask Codex about this quote">✦ Ask</button>
-          <button class="quote-save-note-btn" title="Save this quote as a note">📝 Note</button>
-          <button class="quote-copy-btn" title="Copy this quote">⧉ Copy</button>
+          <button class="context-ask-btn" type="button" title="${escapeHtml(t("askQuoteTitle"))}">✦ ${escapeHtml(t("ask"))}</button>
+          <button class="quote-save-note-btn" title="${escapeHtml(t("saveQuoteTitle"))}">📝 ${escapeHtml(t("note"))}</button>
+          <button class="quote-copy-btn" title="${escapeHtml(t("copyQuoteTitle"))}">⧉ ${escapeHtml(t("copy"))}</button>
         </div>
       </div>
     `;
@@ -778,7 +872,7 @@ function renderAnalysisResults(analysis) {
     });
     attachContextAskButton(div, {
       sourceType: "overview",
-      sourceLabel: "Overview quote",
+      sourceLabel: t("sourceOverviewQuote"),
       sourceText: quote.quote,
       surroundingContext: getTranscriptContextAtTime(quote.timestampSeconds),
       videoId: currentVideoId,
@@ -792,9 +886,9 @@ function renderAnalysisResults(analysis) {
       e.stopPropagation();
       try {
         await navigator.clipboard.writeText(quote.quote);
-        quoteCopyBtn.textContent = "✓ Copied";
+        quoteCopyBtn.textContent = `✓ ${t("copied")}`;
         setTimeout(() => {
-          quoteCopyBtn.textContent = "⧉ Copy";
+          quoteCopyBtn.textContent = `⧉ ${t("copy")}`;
         }, 1500);
       } catch (err) {
         console.error("Copy failed:", err);
@@ -818,7 +912,7 @@ async function saveQuoteAsNote(quote, btn) {
   if (!currentVideoId) return;
 
   const originalText = btn.textContent;
-  btn.textContent = "Saving...";
+  btn.textContent = t("saving");
   btn.disabled = true;
 
   try {
@@ -834,7 +928,7 @@ async function saveQuoteAsNote(quote, btn) {
     });
 
     if (result.success) {
-      btn.textContent = "✓ Saved";
+      btn.textContent = `✓ ${t("saved")}`;
       setTimeout(() => {
         btn.textContent = originalText;
         btn.disabled = false;
@@ -843,7 +937,7 @@ async function saveQuoteAsNote(quote, btn) {
       loadNotes(currentVideoId);
     } else {
       console.error("[YouTube Digest] Save quote as note failed:", result.error);
-      btn.textContent = "Error";
+      btn.textContent = t("error");
       setTimeout(() => {
         btn.textContent = originalText;
         btn.disabled = false;
@@ -851,7 +945,7 @@ async function saveQuoteAsNote(quote, btn) {
     }
   } catch (error) {
     console.error("[YouTube Digest] Save quote as note error:", error);
-    btn.textContent = "Error";
+    btn.textContent = t("error");
     setTimeout(() => {
       btn.textContent = originalText;
       btn.disabled = false;
@@ -914,7 +1008,7 @@ function renderTranscript() {
   const badge = document.createElement("div");
   badge.id = "transcriptSourceBadge";
   badge.className = "transcript-source-badge";
-  badge.innerHTML = `<span class="source-dot source-dot--subs"></span> From video subtitles · ${escapeHtml(getOriginalTranscriptLabel())}`;
+  badge.innerHTML = `<span class="source-dot source-dot--subs"></span> ${escapeHtml(t("fromVideoSubtitles", { label: getOriginalTranscriptLabel() }))}`;
   transcriptList.parentElement.insertBefore(badge, transcriptList);
 
   // Group entries using smart sentence-boundary + time-guardrail logic
@@ -932,7 +1026,7 @@ function renderTranscript() {
     div.innerHTML = `
       <span class="transcript-time">${timestamp}</span>
       <span class="transcript-text">${renderSubtitleInlineMarkup(group.text)}</span>
-      <button class="context-ask-btn transcript-context-ask-btn" type="button" title="Ask Codex about this transcript passage">Ask</button>
+      <button class="context-ask-btn transcript-context-ask-btn" type="button" title="${escapeHtml(t("askTranscriptTitle"))}">${escapeHtml(t("ask"))}</button>
     `;
 
     div.addEventListener("click", (event) =>
@@ -940,7 +1034,7 @@ function renderTranscript() {
     );
     attachContextAskButton(div, {
       sourceType: "transcript",
-      sourceLabel: "Transcript",
+      sourceLabel: t("sourceTranscript"),
       sourceText: group.text,
       surroundingContext: getTranscriptContextAtTime(group.start),
       videoId: currentVideoId,
@@ -968,21 +1062,21 @@ function exportTranscript() {
   );
 
   let exportText = "";
-  exportText += `TRANSCRIPT\n`;
+  exportText += `${t("exportHeading")}\n`;
   exportText += `${"=".repeat(60)}\n\n`;
-  exportText += `Title: ${currentVideoTitle || "Unknown"}\n`;
-  exportText += `Channel: ${currentChannelName || "Unknown"}\n`;
+  exportText += `${t("exportTitle")}: ${currentVideoTitle || t("unknown")}\n`;
+  exportText += `${t("exportChannel")}: ${currentChannelName || t("unknown")}\n`;
   exportText += `URL: ${videoUrl}\n`;
   exportText += `\n${"—".repeat(60)}\n\n`;
 
   if (currentVideoDescription) {
-    exportText += `DESCRIPTION:\n${currentVideoDescription}\n`;
+    exportText += `${t("exportDescription")}:\n${currentVideoDescription}\n`;
     exportText += `\n${"—".repeat(60)}\n\n`;
   }
 
-  exportText += `TRANSCRIPT:\n\n${transcriptContent}\n`;
+  exportText += `${t("exportHeading")}:\n\n${transcriptContent}\n`;
   exportText += `\n${"—".repeat(60)}\n`;
-  exportText += `Exported by YouTube Digest\n`;
+  exportText += `${t("exportedBy")}\n`;
 
   const filename = `${sanitizeFilename(currentVideoTitle)}-transcript.txt`;
   downloadTextFile(exportText, filename);
@@ -1021,20 +1115,41 @@ function updateLoading(title, subtitle) {
   document.getElementById("loadingSubtext").textContent = subtitle;
 }
 
-function showError(title, message) {
+function renderLocalizedError() {
+  if (!errorLocalization) return;
+  document.getElementById("errorTitle").textContent = errorLocalization.titleKey
+    ? t(errorLocalization.titleKey)
+    : errorLocalization.fallbackTitle || t("error");
+  document.getElementById("errorMessage").textContent = errorLocalization.messageKey
+    ? t(errorLocalization.messageKey)
+    : errorLocalization.fallbackMessage || t("errorFallback");
+  document.getElementById("errorBtn").textContent = t(
+    errorLocalization.buttonKey || "tryAgain",
+  );
+}
+
+function showError(title, message, localization = null) {
   errorAction = null;
+  errorLocalization = localization || {
+    fallbackTitle: title,
+    fallbackMessage: message,
+    buttonKey: "tryAgain",
+  };
   showState("error");
   document.getElementById("errorTitle").textContent = title;
   document.getElementById("errorMessage").textContent = message;
-  document.getElementById("errorBtn").textContent = "Try Again";
+  document.getElementById("errorBtn").textContent = t("tryAgain");
 }
 
 function showConfigError(configStatus) {
   showState("error");
-  document.getElementById("errorTitle").textContent = "Local setup incomplete";
-  document.getElementById("errorMessage").textContent =
-    configStatus?.message || "Open Settings to check the local installation.";
-  document.getElementById("errorBtn").textContent = "Open Settings";
+  errorLocalization = {
+    titleKey: "localSetupIncomplete",
+    messageKey: "openSettingsHelp",
+    fallbackMessage: configStatus?.message || t("openSettingsHelp"),
+    buttonKey: "openSettings",
+  };
+  renderLocalizedError();
   errorAction = () => chrome.runtime.sendMessage({ action: "openOptions" });
 }
 
@@ -1166,23 +1281,23 @@ async function sendLearningPackToCreatorWorkspace(event) {
   if (!currentVideoId || !currentTranscript?.length) {
     setCreatorWorkspaceStatus(
       "error",
-      "Load a YouTube or Bilibili transcript before creating a Learning Pack.",
+      t("loadTranscriptBeforePack"),
     );
     return;
   }
   if (!globalThis.YTD_LEARNING_PACK) {
     setCreatorWorkspaceStatus(
       "error",
-      "Learning Pack support is unavailable.",
+      t("learningPackUnavailable"),
     );
     return;
   }
 
   sendButton.disabled = true;
-  sendButton.textContent = "Sending...";
+  sendButton.textContent = t("sending");
   setCreatorWorkspaceStatus(
     "working",
-    "Writing to the configured Creator Workspace inbox...",
+    t("writingWorkspace"),
   );
   try {
     await saveLearningPackDraft();
@@ -1193,7 +1308,7 @@ async function sendLearningPackToCreatorWorkspace(event) {
       pageNumber: currentPageNumber,
     });
     if (!notesResult?.success) {
-      throw new Error(notesResult?.error || "Could not load saved notes.");
+      throw new Error(notesResult?.error || t("couldNotLoadNotes"));
     }
 
     const pack = YTD_LEARNING_PACK.buildLearningPack({
@@ -1220,22 +1335,22 @@ async function sendLearningPackToCreatorWorkspace(event) {
       pack,
     });
     if (!result?.success) {
-      throw new Error(result?.error || "Creator Workspace handoff failed.");
+      throw new Error(result?.error || t("handoffFailed"));
     }
     setCreatorWorkspaceStatus(
       "success",
-      "Learning Pack saved. No article project was created.",
+      t("handoffSuccess"),
       result.receipt?.directory || "",
     );
   } catch (error) {
     console.error("[YouTube Digest] Creator Workspace handoff failed:", error);
     setCreatorWorkspaceStatus(
       "error",
-      error?.message || "Creator Workspace handoff failed.",
+      error?.message || t("handoffFailed"),
     );
   } finally {
     sendButton.disabled = false;
-    sendButton.textContent = "Send to Creator Workspace";
+    sendButton.textContent = t("sendToWorkspace");
   }
 }
 
@@ -1255,10 +1370,10 @@ async function triggerAnalysis() {
 
   if (chapterList)
     chapterList.innerHTML =
-      '<li class="chapter-item" style="color: var(--text-muted); border: none;">Loading chapters...</li>';
+      `<li class="chapter-item" style="color: var(--text-muted); border: none;">${escapeHtml(t("loadingChapters"))}</li>`;
   if (quotesList)
     quotesList.innerHTML =
-      '<div class="quote-item" style="color: var(--text-muted); border-left-color: var(--border);">Loading quotes...</div>';
+      `<div class="quote-item" style="color: var(--text-muted); border-left-color: var(--border);">${escapeHtml(t("loadingQuotes"))}</div>`;
 
   try {
     const analysisResult = await chrome.runtime.sendMessage({
@@ -1272,7 +1387,7 @@ async function triggerAnalysis() {
 
     if (!analysisResult.success) {
       if (chapterList)
-        chapterList.innerHTML = `<li class="chapter-item" style="color: var(--accent); border: none;">Analysis failed: ${escapeHtml(analysisResult.error || "Unknown error")}</li>`;
+        chapterList.innerHTML = `<li class="chapter-item" style="color: var(--accent); border: none;">${escapeHtml(t("analysisFailed", { error: analysisResult.error || t("unknownError") }))}</li>`;
       isAnalysisLoading = false;
       return;
     }
@@ -1286,7 +1401,7 @@ async function triggerAnalysis() {
   } catch (error) {
     console.error("[YouTube Digest Panel] Analysis error:", error);
     if (chapterList)
-      chapterList.innerHTML = `<li class="chapter-item" style="color: var(--accent); border: none;">Error: ${escapeHtml(error.message)}</li>`;
+      chapterList.innerHTML = `<li class="chapter-item" style="color: var(--accent); border: none;">${escapeHtml(t("genericError", { error: error.message }))}</li>`;
   }
 
   isAnalysisLoading = false;
@@ -1408,10 +1523,10 @@ function openContextQuestion(context) {
     <div class="context-question-modal" role="dialog" aria-modal="true" aria-labelledby="contextQuestionTitle">
       <div class="context-question-header">
         <div>
-          <div class="context-question-eyebrow">ASK CODEX</div>
-          <div class="context-question-title" id="contextQuestionTitle">Ask about this passage</div>
+          <div class="context-question-eyebrow">${escapeHtml(t("askCodexEyebrow"))}</div>
+          <div class="context-question-title" id="contextQuestionTitle">${escapeHtml(t("askPassage"))}</div>
         </div>
-        <button class="context-question-close" type="button" aria-label="Close">✕</button>
+        <button class="context-question-close" type="button" aria-label="${escapeHtml(t("close"))}">✕</button>
       </div>
       <div class="context-question-source">
         <div class="context-question-source-meta">
@@ -1421,13 +1536,13 @@ function openContextQuestion(context) {
         <div class="context-question-excerpt">${escapeHtml(context.sourceText).replace(/\n/g, "<br>")}</div>
       </div>
       <form class="context-question-form">
-        <label for="contextQuestionInput">Your question</label>
-        <textarea id="contextQuestionInput" rows="3" maxlength="2000" required placeholder="What do you want to understand about this passage?"></textarea>
-        <button class="context-question-submit" type="submit">Ask Codex</button>
+        <label for="contextQuestionInput">${escapeHtml(t("yourQuestion"))}</label>
+        <textarea id="contextQuestionInput" rows="3" maxlength="2000" required placeholder="${escapeHtml(t("questionPlaceholder"))}"></textarea>
+        <button class="context-question-submit" type="submit">${escapeHtml(t("askCodex"))}</button>
       </form>
       <div class="context-question-result" aria-live="polite" hidden>
         <div class="context-question-answer"></div>
-        <button class="context-question-save" type="button" hidden>＋ Save answer to Notes</button>
+        <button class="context-question-save" type="button" hidden>＋ ${escapeHtml(t("saveAnswerToNotes"))}</button>
       </div>
     </div>
   `;
@@ -1455,15 +1570,15 @@ function openContextQuestion(context) {
     latestRequest = { ...context, question };
     latestAnswer = "";
     submit.disabled = true;
-    submit.textContent = "Asking Codex…";
+    submit.textContent = t("askingCodex");
     resultBox.hidden = false;
     saveButton.disabled = false;
     saveButton.hidden = true;
-    saveButton.textContent = "＋ Save answer to Notes";
+    saveButton.textContent = `＋ ${t("saveAnswerToNotes")}`;
     answerBox.innerHTML = `
       <div class="explain-loading">
         <div class="loading-bar"></div>
-        <span>Reading the selected context…</span>
+        <span>${escapeHtml(t("readingContext"))}</span>
       </div>
     `;
 
@@ -1473,7 +1588,7 @@ function openContextQuestion(context) {
         request: latestRequest,
       });
       if (!response?.success) {
-        throw new Error(response?.error || "Codex could not answer this question.");
+        throw new Error(response?.error || t("codexCouldNotAnswer"));
       }
       latestAnswer = response.answer;
       answerBox.innerHTML = `<div class="context-question-answer-text">${escapeHtml(latestAnswer).replace(/\n/g, "<br>")}</div>`;
@@ -1482,14 +1597,14 @@ function openContextQuestion(context) {
       answerBox.innerHTML = `<div class="explain-error">${escapeHtml(error.message)}</div>`;
     } finally {
       submit.disabled = false;
-      submit.textContent = "Ask Codex";
+      submit.textContent = t("askCodex");
     }
   });
 
   saveButton.addEventListener("click", async () => {
     if (!latestRequest || !latestAnswer) return;
     saveButton.disabled = true;
-    saveButton.textContent = "Saving…";
+    saveButton.textContent = t("savingEllipsis");
     try {
       const response = await chrome.runtime.sendMessage({
         action: "saveQuestionAnswerNote",
@@ -1497,12 +1612,12 @@ function openContextQuestion(context) {
         answer: latestAnswer,
       });
       if (!response?.success) {
-        throw new Error(response?.error || "Could not save this answer.");
+        throw new Error(response?.error || t("couldNotSaveAnswer"));
       }
-      saveButton.textContent = "✓ Saved to Notes";
+      saveButton.textContent = `✓ ${t("savedToNotes")}`;
     } catch (error) {
       saveButton.disabled = false;
-      saveButton.textContent = `Retry save: ${error.message}`;
+      saveButton.textContent = t("retrySave", { error: error.message });
     }
   });
 
@@ -1567,7 +1682,7 @@ async function copyToClipboardWithFeedback(text, buttonId) {
 
   const success = await copyToClipboard(text);
   if (success) {
-    btn.textContent = "✓ Copied";
+    btn.textContent = `✓ ${t("copied")}`;
     setTimeout(() => {
       btn.textContent = original;
     }, 2000);
@@ -1613,8 +1728,8 @@ function setupExplainFeature() {
   tooltip.id = "explainTooltip";
   tooltip.className = "explain-tooltip";
   tooltip.innerHTML = `
-    <button class="explain-btn">💡 Explain</button>
-    <button class="selection-ask-btn">✦ Ask</button>
+    <button class="explain-btn">💡 ${escapeHtml(t("explain"))}</button>
+    <button class="selection-ask-btn">✦ ${escapeHtml(t("ask"))}</button>
   `;
   tooltip.style.display = "none";
   document.body.appendChild(tooltip);
@@ -1693,7 +1808,7 @@ function setupExplainFeature() {
       tooltip.style.display = "none";
       openContextQuestion({
         sourceType: "transcript",
-        sourceLabel: "Transcript selection",
+        sourceLabel: t("sourceTranscriptSelection"),
         sourceText: selectedText,
         surroundingContext: getTranscriptContextAtTime(
           selectedTimestampSeconds,
@@ -1717,14 +1832,14 @@ async function showExplanation(selectedText) {
   modal.innerHTML = `
     <div class="explain-modal">
       <div class="explain-modal-header">
-        <div class="explain-modal-title">Explain</div>
+        <div class="explain-modal-title">${escapeHtml(t("explain"))}</div>
         <button class="explain-modal-close" id="closeExplain">✕</button>
       </div>
       <div class="explain-selected-text">"${escapeHtml(selectedText.substring(0, 200))}${selectedText.length > 200 ? "..." : ""}"</div>
       <div class="explain-modal-content" id="explanationContent">
         <div class="explain-loading">
           <div class="loading-bar"></div>
-          <span>Analyzing...</span>
+          <span>${escapeHtml(t("analyzing"))}</span>
         </div>
       </div>
     </div>
@@ -1756,11 +1871,11 @@ async function showExplanation(selectedText) {
     if (result.success) {
       contentDiv.innerHTML = `<div class="explain-text">${escapeHtml(result.explanation).replace(/\n\n/g, "</p><p>").replace(/\n/g, "<br>")}</div>`;
     } else {
-      contentDiv.innerHTML = `<div class="explain-error">Failed to get explanation: ${escapeHtml(result.error)}</div>`;
+      contentDiv.innerHTML = `<div class="explain-error">${escapeHtml(t("explanationFailed", { error: result.error }))}</div>`;
     }
   } catch (error) {
     const contentDiv = document.getElementById("explanationContent");
-    contentDiv.innerHTML = `<div class="explain-error">Error: ${escapeHtml(error.message)}</div>`;
+    contentDiv.innerHTML = `<div class="explain-error">${escapeHtml(t("genericError", { error: error.message }))}</div>`;
   }
 }
 
@@ -1976,8 +2091,8 @@ function renderNotes(notes, filteredVideoId) {
   if (!notes || notes.length === 0) {
     notesIntro.style.display = "block";
     notesIntro.textContent = filteredVideoId
-      ? "No notes for this video yet. Hover over the video and click 📝 Note to save."
-      : "No notes saved yet. Hover over a video and click 📝 Note to save.";
+      ? t("noNotesThisVideo")
+      : t("noNotesAll");
     return;
   }
 
@@ -1994,21 +2109,21 @@ function renderNotes(notes, filteredVideoId) {
       <div class="note-header">
         <span class="note-timestamp" data-url="${escapeHtml(note.timestampedUrl)}" data-seconds="${Number(note.timestampSeconds) || 0}">${escapeHtml(note.timestamp)}</span>
         ${!filteredVideoId ? `<span class="note-video-title">${escapeHtml(note.videoTitle)}</span>` : ""}
-        ${note.noteType === "question_answer" ? '<span class="note-kind">Codex answer</span>' : ""}
-        <button class="note-delete" data-id="${escapeHtml(note.id)}" title="Delete note">✕</button>
+        ${note.noteType === "question_answer" ? `<span class="note-kind">${escapeHtml(t("codexAnswer"))}</span>` : ""}
+        <button class="note-delete" data-id="${escapeHtml(note.id)}" title="${escapeHtml(t("deleteNote"))}">✕</button>
       </div>
       <div class="note-text">${noteBody}</div>
       <div class="note-actions">
-        <button class="note-action-btn context-ask-btn">✦ Ask</button>
-        <button class="note-action-btn note-copy-text">⧉ Copy text</button>
-        <button class="note-action-btn note-copy-link" data-url="${escapeHtml(note.timestampedUrl)}">🔗 Copy timestamp</button>
-        <button class="note-action-btn note-play" data-seconds="${Number(note.timestampSeconds) || 0}">▶ Play</button>
+        <button class="note-action-btn context-ask-btn">✦ ${escapeHtml(t("ask"))}</button>
+        <button class="note-action-btn note-copy-text">⧉ ${escapeHtml(t("copyText"))}</button>
+        <button class="note-action-btn note-copy-link" data-url="${escapeHtml(note.timestampedUrl)}">🔗 ${escapeHtml(t("copyTimestamp"))}</button>
+        <button class="note-action-btn note-play" data-seconds="${Number(note.timestampSeconds) || 0}">▶ ${escapeHtml(t("play"))}</button>
       </div>
     `;
 
     attachContextAskButton(noteEl, {
       sourceType: "note",
-      sourceLabel: "Saved note",
+      sourceLabel: t("sourceSavedNote"),
       sourceText: note.text,
       surroundingContext: note.rawText || "",
       videoId: note.videoId,
@@ -2038,9 +2153,9 @@ function renderNotes(notes, filteredVideoId) {
         try {
           await navigator.clipboard.writeText(note.text);
           const btn = noteEl.querySelector(".note-copy-text");
-          btn.textContent = "✓ Copied!";
+          btn.textContent = `✓ ${t("copiedBang")}`;
           setTimeout(() => {
-            btn.textContent = "⧉ Copy text";
+            btn.textContent = `⧉ ${t("copyText")}`;
           }, 2000);
         } catch (err) {
           console.error("Copy failed:", err);
@@ -2054,9 +2169,9 @@ function renderNotes(notes, filteredVideoId) {
         try {
           await navigator.clipboard.writeText(note.timestampedUrl);
           const btn = noteEl.querySelector(".note-copy-link");
-          btn.textContent = "✓ Copied!";
+          btn.textContent = `✓ ${t("copiedBang")}`;
           setTimeout(() => {
-            btn.textContent = "🔗 Copy timestamp";
+            btn.textContent = `🔗 ${t("copyTimestamp")}`;
           }, 2000);
         } catch (err) {
           console.error("Copy failed:", err);
@@ -2243,8 +2358,8 @@ function onContentAreaScroll() {
 function getOriginalTranscriptLabel() {
   const language = String(currentTranscriptLanguage || "").trim();
   return /^[A-Za-z0-9-]{1,20}$/.test(language)
-    ? `Original (${language})`
-    : "Original";
+    ? t("originalWithLanguage", { language })
+    : t("original");
 }
 
 function getActiveTranscriptSegments() {
@@ -2289,9 +2404,9 @@ function renderTranscriptSegmentContent(segment, mode, translated, error) {
   if (translated) {
     translationHtml = renderSubtitleInlineMarkup(translated);
   } else if (error) {
-    translationHtml = `${escapeHtml(error)}<button class="translation-retry-btn" type="button">Retry</button>`;
+    translationHtml = `${escapeHtml(error)}<button class="translation-retry-btn" type="button">${escapeHtml(t("retry"))}</button>`;
   } else {
-    translationHtml = "Waiting for translation…";
+    translationHtml = escapeHtml(t("waitingTranslation"));
   }
 
   if (mode === "bilingual") {
@@ -2314,9 +2429,9 @@ function renderTranscriptModeRows(segments, mode) {
   const originalLabel = getOriginalTranscriptLabel();
   const modeLabel =
     mode === "bilingual"
-      ? `${originalLabel} + 简体中文`
-      : `简体中文 · translated from ${originalLabel}`;
-  badge.innerHTML = `<span class="source-dot source-dot--subs"></span> From video subtitles · ${modeLabel}`;
+      ? t("bilingualModeLabel", { original: originalLabel })
+      : t("translatedModeLabel", { original: originalLabel });
+  badge.innerHTML = `<span class="source-dot source-dot--subs"></span> ${escapeHtml(t("fromVideoSubtitles", { label: modeLabel }))}`;
   transcriptList.parentElement.insertBefore(badge, transcriptList);
 
   const rows = [];
@@ -2336,14 +2451,14 @@ function renderTranscriptModeRows(segments, mode) {
     div.innerHTML = `
       <span class="transcript-time">${timestamp}</span>
       ${renderTranscriptSegmentContent(segment, mode, cached, "")}
-      <button class="context-ask-btn transcript-context-ask-btn" type="button" title="Ask Codex about this transcript passage">Ask</button>
+      <button class="context-ask-btn transcript-context-ask-btn" type="button" title="${escapeHtml(t("askTranscriptTitle"))}">${escapeHtml(t("ask"))}</button>
     `;
     div.addEventListener("click", (event) =>
       seekFromTranscriptEntryClick(event, segment.start),
     );
     attachContextAskButton(div, {
       sourceType: "transcript",
-      sourceLabel: "Transcript",
+      sourceLabel: t("sourceTranscript"),
       sourceText: segment.text,
       surroundingContext: getTranscriptContextAtTime(segment.start),
       videoId: currentVideoId,
@@ -2379,7 +2494,7 @@ function alignTranslatedSegmentBatch(sourceSegments, responseSegments) {
   return sourceSegments.map((segment) => ({
     id: segment.id,
     text: translatedById.get(segment.id) || "",
-    error: translatedById.has(segment.id) ? "" : "Translation unavailable.",
+    error: translatedById.has(segment.id) ? "" : t("translationUnavailable"),
   }));
 }
 
@@ -2460,7 +2575,7 @@ async function requestTranscriptTranslationBatch(
     const aligned = alignTranslatedSegmentBatch(sourceBatch, responseSegments);
     aligned.forEach((item, batchIndex) => {
       if (!result?.success) {
-        item.error = result?.error || "Translation failed.";
+        item.error = result?.error || t("translationFailed");
       }
       updateTranslatedRow(
         sourceBatch[batchIndex],
@@ -2476,7 +2591,7 @@ async function requestTranscriptTranslationBatch(
       updateTranslatedRow(
         segment,
         indices[batchIndex],
-        { id: segment.id, text: "", error: error.message || "Translation failed." },
+        { id: segment.id, text: "", error: error.message || t("translationFailed") },
         generation,
       );
     });
@@ -2496,7 +2611,7 @@ function retryTranslationSegment(index, generation) {
     const translation = row.querySelector(".transcript-translation");
     if (translation) {
       translation.className = "transcript-translation translation-pending";
-      translation.textContent = "Retrying…";
+      translation.textContent = t("retrying");
     }
   }
   activeTranslationQueue.enqueue(index, true);

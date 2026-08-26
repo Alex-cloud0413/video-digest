@@ -157,6 +157,14 @@ body {
   flex: 1;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+.language-btn,
 .settings-btn {
   flex-shrink: 0;
   padding: 5px 10px;
@@ -168,6 +176,15 @@ body {
   font: 600 11px/1.4 var(--font-body);
 }
 
+.language-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 54px;
+  justify-content: center;
+}
+
+.language-btn:hover,
 .settings-btn:hover {
   border-color: var(--accent);
   color: var(--accent);

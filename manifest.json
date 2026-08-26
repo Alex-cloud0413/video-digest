@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "YouTube Digest + Codex",
-  "version": "1.5.2",
+  "name": "Video Digest",
+  "version": "1.6.0",
   "minimum_chrome_version": "116",
   "description": "Study YouTube and Bilibili with direct subtitles, local Codex features, and reusable Learning Packs.",
   "permissions": ["sidePanel", "storage", "tabs", "scripting"],
@@ -14,7 +14,7 @@
     "http://127.0.0.1:43110/*"
   ],
   "action": {
-    "default_title": "Open YouTube Digest",
+    "default_title": "Open Video Digest",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",

@@ -7,15 +7,16 @@ const options = require("../options.js");
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
-test("settings copy covers English and Simplified Chinese", () => {
+test("settings copy covers English, Simplified Chinese, and German", () => {
   assert.equal(
     options.translate("en", "pageTitle"),
-    "YouTube Digest + Codex",
+    "Video Digest",
   );
   assert.equal(
     options.translate("zh-CN", "pageTitle"),
-    "YouTube Digest + Codex",
+    "Video Digest",
   );
+  assert.equal(options.translate("de", "pageTitle"), "Video Digest");
   assert.equal(
     options.translate("zh-CN", "clearedDigests", { count: 2 }),
     "已清除 2 个视频缓存。",
@@ -24,6 +25,10 @@ test("settings copy covers English and Simplified Chinese", () => {
   assert.deepEqual(
     Object.keys(options.COPY.en).sort(),
     Object.keys(options.COPY["zh-CN"]).sort(),
+  );
+  assert.deepEqual(
+    Object.keys(options.COPY.en).sort(),
+    Object.keys(options.COPY.de).sort(),
   );
 });
 
@@ -36,6 +41,7 @@ test("every localized options-page key exists", () => {
   for (const key of referencedKeys) {
     assert.ok(options.COPY.en[key], `Missing English copy for ${key}`);
     assert.ok(options.COPY["zh-CN"][key], `Missing Chinese copy for ${key}`);
+    assert.ok(options.COPY.de[key], `Missing German copy for ${key}`);
   }
 });
 
@@ -44,6 +50,7 @@ test("options page exposes local status and no API-key fields", () => {
   assert.match(html, /id="checkConnectionBtn"/);
   assert.match(html, /YouTube \+ Bilibili subtitles/);
   assert.match(html, /ChatGPT sign-in/);
+  assert.match(html, /data-language="de"/);
   assert.doesNotMatch(html, /type="password"/i);
   assert.doesNotMatch(html, /id="(?:supadataApiKey|aiApiKey)"/i);
 });

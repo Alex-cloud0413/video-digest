@@ -3,12 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>YouTube Digest</title>
+    <title>Video Digest</title>
     <link rel="stylesheet" href="sidepanel.css" />
   </head>
   <body>
     <!-- HEADER -->
-    <!-- Note: the panel's own "YouTube Digest" title is shown by Chrome's side-panel
+    <!-- Note: the panel's own "Video Digest" title is shown by Chrome's side-panel
          title bar, so we don't repeat a logo here. -->
     <div class="header">
       <div class="header-top">
@@ -17,23 +17,36 @@
           <div class="video-title" id="videoTitle"></div>
           <div class="video-channel" id="videoChannel"></div>
         </div>
-        <button
-          class="settings-btn"
-          id="settingsBtn"
-          type="button"
-          title="Open YouTube Digest settings"
-          aria-label="Open YouTube Digest settings"
-        >
-          Settings
-        </button>
+        <div class="header-actions">
+          <button
+            class="language-btn"
+            id="languageBtn"
+            type="button"
+            title="Interface language: English. Click to switch."
+            aria-label="Interface language: English. Click to switch."
+          >
+            <span aria-hidden="true">🌐</span>
+            <span id="languageBtnLabel">EN</span>
+          </button>
+          <button
+            class="settings-btn"
+            id="settingsBtn"
+            type="button"
+            title="Open Video Digest settings"
+            aria-label="Open Video Digest settings"
+            data-i18n-title="settingsTitle"
+            data-i18n-aria-label="settingsTitle"
+            data-i18n="settings"
+          >Settings</button>
+        </div>
       </div>
 
       <!-- Tab navigation -->
       <div class="tabs" id="tabsNav" style="display: none">
-        <button class="tab active" data-tab="transcript">Transcript</button>
-        <button class="tab" data-tab="overview">Overview</button>
-        <button class="tab" data-tab="notes">Notes</button>
-        <button class="tab" data-tab="create">Create</button>
+        <button class="tab active" data-tab="transcript" data-i18n="tabTranscript">Transcript</button>
+        <button class="tab" data-tab="overview" data-i18n="tabOverview">Overview</button>
+        <button class="tab" data-tab="notes" data-i18n="tabNotes">Notes</button>
+        <button class="tab" data-tab="create" data-i18n="tabCreate">Create</button>
       </div>
     </div>
 
@@ -42,8 +55,8 @@
       <!-- WELCOME STATE -->
       <div id="welcomeState" class="welcome-container">
         <div class="welcome-icon">&#9655;</div>
-        <div class="welcome-title">Ready to Digest</div>
-        <div class="welcome-desc">
+        <div class="welcome-title" data-i18n="readyTitle">Ready to Digest</div>
+        <div class="welcome-desc" data-i18n="readyDesc">
           Navigate to a YouTube or Bilibili video and click the extension icon to get an
           AI-powered digest.
         </div>
@@ -53,8 +66,8 @@
       <div id="loadingState" style="display: none">
         <div class="loading-container">
           <div class="loading-bar"></div>
-          <div class="loading-text" id="loadingText">Fetching transcript</div>
-          <div class="loading-subtext" id="loadingSubtext">
+          <div class="loading-text" id="loadingText" data-i18n="fetchingTranscript">Fetching transcript</div>
+          <div class="loading-subtext" id="loadingSubtext" data-i18n="extractingCaptions">
             Extracting captions from video...
           </div>
         </div>
@@ -68,7 +81,7 @@
           <div class="error-message" id="errorMessage">
             Something went wrong.
           </div>
-          <button class="error-btn" id="errorBtn">Try Again</button>
+          <button class="error-btn" id="errorBtn" data-i18n="tryAgain">Try Again</button>
         </div>
       </div>
 
@@ -80,43 +93,48 @@
             <div class="section-header transcript-section-header">
               <div class="transcript-header-main">
                 <div class="section-title-wrap">
-                  <div class="section-title">Full Transcript</div>
+                  <div class="section-title" data-i18n="fullTranscript">Full Transcript</div>
                 </div>
                 <div
                   class="transcript-mode-control"
                   id="transcriptModeControl"
                   role="group"
                   aria-label="Transcript language"
+                  data-i18n-aria-label="transcriptLanguage"
                 >
                   <button
                     class="transcript-mode-btn active"
                     type="button"
                     data-transcript-mode="original"
                     aria-pressed="true"
+                    data-i18n="original"
                   >Original</button>
                   <button
                     class="transcript-mode-btn"
                     type="button"
                     data-transcript-mode="zh"
                     aria-pressed="false"
-                  >中文</button>
+                    data-i18n="chinese"
+                  >Chinese</button>
                   <button
                     class="transcript-mode-btn"
                     type="button"
                     data-transcript-mode="bilingual"
                     aria-pressed="false"
-                  >双语</button>
+                    data-i18n="bilingual"
+                  >Bilingual</button>
                   <span
                     class="translation-spinner"
                     id="langSpinner"
                     aria-label="Translating"
+                    data-i18n-aria-label="translating"
                   ></span>
                 </div>
               </div>
               <div class="transcript-actions">
-                <button class="enhance-btn" id="copyTranscriptBtn">Copy</button>
+                <button class="enhance-btn" id="copyTranscriptBtn" data-i18n="copy">Copy</button>
                 <button class="enhance-btn" id="exportTranscriptBtn">
-                  Export
+                  <span data-i18n="export">Export</span>
                 </button>
               </div>
             </div>
@@ -128,7 +146,7 @@
         <div class="tab-panel" data-panel="overview">
           <!-- Chapters -->
           <div class="section">
-            <div class="section-title">Chapters</div>
+            <div class="section-title" data-i18n="chapters">Chapters</div>
             <ul class="chapter-list" id="chapterList">
               <li
                 class="chapter-item"
@@ -138,14 +156,14 @@
                   border-color: var(--border);
                 "
               >
-                Chapters will appear here
+                <span data-i18n="chaptersPlaceholder">Chapters will appear here</span>
               </li>
             </ul>
           </div>
 
           <!-- Key Quotes -->
           <div class="section">
-            <div class="section-title">Key Quotes</div>
+            <div class="section-title" data-i18n="keyQuotes">Key Quotes</div>
             <div id="quotesList">
               <div
                 class="quote-item"
@@ -155,7 +173,7 @@
                   cursor: default;
                 "
               >
-                <div class="quote-text" style="font-style: normal">
+                <div class="quote-text" style="font-style: normal" data-i18n="quotesPlaceholder">
                   Quotes will be extracted when you view this tab...
                 </div>
               </div>
@@ -167,25 +185,25 @@
         <div class="tab-panel" data-panel="notes">
           <div class="section">
             <div class="section-header">
-              <div class="section-title">Saved Notes</div>
+              <div class="section-title" data-i18n="savedNotes">Saved Notes</div>
               <div class="notes-filter">
                 <button
                   class="enhance-btn active"
                   id="notesFilterThis"
                   aria-pressed="true"
                 >
-                  This Video
+                  <span data-i18n="thisVideo">This Video</span>
                 </button>
                 <button
                   class="enhance-btn"
                   id="notesFilterAll"
                   aria-pressed="false"
                 >
-                  All Notes
+                  <span data-i18n="allNotes">All Notes</span>
                 </button>
               </div>
             </div>
-            <p class="notes-intro" id="notesIntro">
+            <p class="notes-intro" id="notesIntro" data-i18n="notesIntro">
               Move your mouse over the video and click the 📝 Note button to
               save timestamped notes, or press the "n" key while the video is
               focused.
@@ -197,72 +215,76 @@
         <!-- TAB: Create a bounded Learning Pack for a Creator Workspace -->
         <div class="tab-panel" data-panel="create">
           <div class="create-hero">
-            <div class="create-eyebrow">LEARNING PACK</div>
-            <h2 class="create-title">Turn learning into a reusable input</h2>
-            <p class="create-description">
+            <div class="create-eyebrow" data-i18n="learningPack">LEARNING PACK</div>
+            <h2 class="create-title" data-i18n="createTitle">Turn learning into a reusable input</h2>
+            <p class="create-description" data-i18n="createDesc">
               Add your own thinking, then send the digest and notes to the
               configured Creator Workspace inbox.
             </p>
             <div class="learning-state-row">
               <span class="learning-state-dot" aria-hidden="true"></span>
-              <span>Learning complete</span>
+              <span data-i18n="learningComplete">Learning complete</span>
               <span class="learning-state-divider" aria-hidden="true">·</span>
-              <span>Article not started</span>
+              <span data-i18n="articleNotStarted">Article not started</span>
             </div>
           </div>
 
           <form class="learning-form" id="learningPackForm">
             <label class="learning-field" for="createMyTake">
-              <span class="learning-label">My take</span>
-              <span class="learning-hint">What matters most to you?</span>
+              <span class="learning-label" data-i18n="myTake">My take</span>
+              <span class="learning-hint" data-i18n="myTakeHint">What matters most to you?</span>
               <textarea
                 id="createMyTake"
                 rows="4"
                 maxlength="10000"
                 placeholder="The idea I want to remember is..."
+                data-i18n-placeholder="myTakePlaceholder"
               ></textarea>
             </label>
 
             <label class="learning-field" for="createAgreeDisagree">
-              <span class="learning-label">Agree / disagree</span>
-              <span class="learning-hint">Where do you differ from the video?</span>
+              <span class="learning-label" data-i18n="agreeDisagree">Agree / disagree</span>
+              <span class="learning-hint" data-i18n="agreeDisagreeHint">Where do you differ from the video?</span>
               <textarea
                 id="createAgreeDisagree"
                 rows="3"
                 maxlength="10000"
                 placeholder="I agree with... but I question..."
+                data-i18n-placeholder="agreeDisagreePlaceholder"
               ></textarea>
             </label>
 
             <label class="learning-field" for="createConnections">
-              <span class="learning-label">Connections</span>
-              <span class="learning-hint">Link it to your work, life, or existing ideas.</span>
+              <span class="learning-label" data-i18n="connections">Connections</span>
+              <span class="learning-hint" data-i18n="connectionsHint">Link it to your work, life, or existing ideas.</span>
               <textarea
                 id="createConnections"
                 rows="3"
                 maxlength="10000"
                 placeholder="This connects to..."
+                data-i18n-placeholder="connectionsPlaceholder"
               ></textarea>
             </label>
 
             <label class="learning-field" for="createCoreClaim">
-              <span class="learning-label">Possible core claim</span>
-              <span class="learning-hint">Optional — a seed, not an article brief.</span>
+              <span class="learning-label" data-i18n="coreClaim">Possible core claim</span>
+              <span class="learning-hint" data-i18n="coreClaimHint">Optional — a seed, not an article brief.</span>
               <textarea
                 id="createCoreClaim"
                 rows="2"
                 maxlength="2000"
                 placeholder="One claim worth developing later might be..."
+                data-i18n-placeholder="coreClaimPlaceholder"
               ></textarea>
             </label>
 
-            <div class="pack-contents" aria-label="Learning Pack contents">
-              <div class="pack-contents-title">This handoff includes</div>
-              <div class="pack-content-row"><span>Video source</span><span>✓</span></div>
-              <div class="pack-content-row"><span>Overview, if generated</span><span>✓</span></div>
-              <div class="pack-content-row"><span>Saved notes</span><span>✓</span></div>
-              <div class="pack-content-row"><span>Your reflection</span><span>✓</span></div>
-              <div class="pack-content-row pack-content-excluded"><span>Full transcript</span><span>Not included</span></div>
+            <div class="pack-contents" aria-label="Learning Pack contents" data-i18n-aria-label="packContents">
+              <div class="pack-contents-title" data-i18n="handoffIncludes">This handoff includes</div>
+              <div class="pack-content-row"><span data-i18n="videoSource">Video source</span><span>✓</span></div>
+              <div class="pack-content-row"><span data-i18n="overviewIfGenerated">Overview, if generated</span><span>✓</span></div>
+              <div class="pack-content-row"><span data-i18n="savedNotes">Saved notes</span><span>✓</span></div>
+              <div class="pack-content-row"><span data-i18n="yourReflection">Your reflection</span><span>✓</span></div>
+              <div class="pack-content-row pack-content-excluded"><span data-i18n="fullTranscript">Full transcript</span><span data-i18n="notIncluded">Not included</span></div>
             </div>
 
             <button
@@ -270,9 +292,9 @@
               id="sendToCreatorWorkspaceBtn"
               type="submit"
             >
-              Send to Creator Workspace
+              <span data-i18n="sendToWorkspace">Send to Creator Workspace</span>
             </button>
-            <p class="creator-workspace-boundary">
+            <p class="creator-workspace-boundary" data-i18n="handoffBoundary">
               Saves a Learning Pack only. It does not create an article
               project or publish anything.
             </p>
@@ -294,13 +316,14 @@
       id="followPlaybackBtn"
       style="display: none"
     >
-      Follow playback
+      <span data-i18n="followPlayback">Follow playback</span>
     </button>
 
     <script src="platforms.js"></script>
     <script src="settings.js"></script>
     <script src="learning-pack.js"></script>
     <script src="question-answer.js"></script>
+    <script src="sidepanel-i18n.js"></script>
     <script src="sidepanel.js"></script>
   </body>
 </html>

@@ -1,10 +1,10 @@
 const YTD_OPTIONS = (() => {
   const LANGUAGE_STORAGE_KEY = "ytd_options_language";
-  const SUPPORTED_LANGUAGES = new Set(["en", "zh-CN"]);
+  const SUPPORTED_LANGUAGES = new Set(["en", "zh-CN", "de"]);
 
   const COPY = {
     en: {
-      pageTitle: "YouTube Digest + Codex",
+      pageTitle: "Video Digest",
       languageGroupLabel: "Interface language",
       heading: "Connected to your local Codex",
       lede:
@@ -36,13 +36,13 @@ const YTD_OPTIONS = (() => {
         `Cleared ${count} cached digest${count === 1 ? "" : "s"}.`,
       notesDeleted: "Deleted all saved notes.",
       resetConfirm: "Delete all cached digests, translations, and saved notes?",
-      allDataDeleted: "All YouTube Digest data was deleted.",
+      allDataDeleted: "All Video Digest data was deleted.",
       actionFailed: "The action failed. Please try again.",
       footer:
-        "Open-source local edition based on YouTube Digest and powered by Codex.",
+        "Video Digest is an open-source local edition based on YouTube Digest and powered by Codex.",
     },
     "zh-CN": {
-      pageTitle: "YouTube Digest + Codex",
+      pageTitle: "Video Digest",
       languageGroupLabel: "界面语言",
       heading: "已连接到本机 Codex",
       lede: "这个本地优先版本不需要 Supadata、DeepSeek 或 OpenAI API Key。",
@@ -71,9 +71,47 @@ const YTD_OPTIONS = (() => {
       clearedDigests: ({ count }) => `已清除 ${count} 个视频缓存。`,
       notesDeleted: "已删除全部笔记。",
       resetConfirm: "删除全部缓存、翻译和笔记吗？",
-      allDataDeleted: "已删除全部 YouTube Digest 数据。",
+      allDataDeleted: "已删除全部 Video Digest 数据。",
       actionFailed: "操作失败，请重试。",
-      footer: "基于 YouTube Digest、由 Codex 驱动的开源本地版本。",
+      footer: "Video Digest 是基于 YouTube Digest、由 Codex 驱动的开源本地版本。",
+    },
+    de: {
+      pageTitle: "Video Digest",
+      languageGroupLabel: "Oberflächensprache",
+      heading: "Mit lokalem Codex verbunden",
+      lede:
+        "Diese lokal ausgerichtete Version benötigt keinen Supadata-, DeepSeek- oder OpenAI-API-Schlüssel.",
+      transcriptHeading: "Transkriptquelle",
+      transcriptProvider: "YouTube- und Bilibili-Untertitel",
+      noKeyBadge: "Kein Schlüssel erforderlich",
+      transcriptHelp:
+        "Die Erweiterung liest Untertitelspuren, die der aktive YouTube- oder Bilibili-Player bereits bereitstellt. Audio wird nicht transkribiert.",
+      aiHeading: "KI-Anbieter",
+      aiProvider: "Codex über deine ChatGPT-Anmeldung",
+      subscriptionBadge: "Abonnementzugang",
+      aiHelp:
+        "Ein nur lokal erreichbarer Helfer sendet den benötigten Transkripttext an die auf diesem Computer angemeldete Codex CLI.",
+      privacyNote:
+        "Anfragen werden auf deine Codex-Abonnementlimits angerechnet. Der Helfer akzeptiert nur authentifizierte Aufrufe lokaler Chrome-Erweiterungen.",
+      checkConnection: "Lokale Verbindung prüfen",
+      checking: "Wird geprüft …",
+      connected: "Verbunden. Codex-Funktionen sind bereit.",
+      disconnected:
+        "Der lokale Helfer ist offline. Starte ihn neu und lade anschließend die Erweiterung neu.",
+      localData: "Lokale Daten",
+      localDataHelp:
+        "Digests, Übersetzungen und Notizen werden in diesem Chrome-Profil gespeichert und können jederzeit gelöscht werden.",
+      clearCache: "Digest-Cache leeren",
+      deleteNotes: "Alle Notizen löschen",
+      resetData: "Erweiterungsdaten zurücksetzen",
+      clearedDigests: ({ count }) =>
+        `${count} zwischengespeicherte${count === 1 ? "n Digest" : " Digests"} gelöscht.`,
+      notesDeleted: "Alle gespeicherten Notizen wurden gelöscht.",
+      resetConfirm: "Alle Digests, Übersetzungen und gespeicherten Notizen löschen?",
+      allDataDeleted: "Alle Video-Digest-Daten wurden gelöscht.",
+      actionFailed: "Die Aktion ist fehlgeschlagen. Bitte erneut versuchen.",
+      footer:
+        "Video Digest ist eine lokale Open-Source-Version auf Basis von YouTube Digest und wird von Codex unterstützt.",
     },
   };
 
@@ -173,7 +211,7 @@ const YTD_OPTIONS = (() => {
       const stored = await chrome.storage.local
         .get(LANGUAGE_STORAGE_KEY)
         .catch(() => ({}));
-      applyLanguage(stored[LANGUAGE_STORAGE_KEY] || "zh-CN");
+      applyLanguage(stored[LANGUAGE_STORAGE_KEY] || "en");
 
       document.querySelectorAll(".language-option").forEach((button) => {
         button.addEventListener("click", async () => {

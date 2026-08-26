@@ -1,6 +1,6 @@
 # Upstream attribution
 
-YouTube Digest + Codex is derived from
+Video Digest is derived from
 [zarazhangrui/youtube-digest](https://github.com/zarazhangrui/youtube-digest),
 originally created by Zara Zhang and distributed under the MIT License.
 

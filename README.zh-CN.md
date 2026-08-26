@@ -1,8 +1,8 @@
-# YouTube Digest + Codex
+# Video Digest
 
 [English](README.md)
 
-一个本地优先的 Chrome 扩展：把带字幕的 YouTube 或哔哩哔哩视频变成可搜索字幕、双语学习视图、Codex 生成的概览与解释、时间戳笔记，以及可继续进入个人创作流程的 Learning Pack。
+Video Digest 是一个本地优先的 Chrome 扩展：把带字幕的 YouTube 或哔哩哔哩视频变成可搜索字幕、双语学习视图、Codex 生成的概览与解释、时间戳笔记，以及可继续进入个人创作流程的 Learning Pack。
 
 本项目基于
 [zarazhangrui/youtube-digest](https://github.com/zarazhangrui/youtube-digest)
@@ -18,6 +18,7 @@
 - 在 Create 页面组合视频来源、概览、笔记与个人反思。
 - 把严格限定内容的 Learning Pack 发送到可配置的本地 Creator Workspace。
 - 跟随浏览器浅色或深色偏好；YouTube 使用红色，哔哩哔哩自动切换为 Logo 粉色。
+- 在侧边栏中切换 English、简体中文和 Deutsch 三种界面语言。
 - 不需要 Supadata、DeepSeek 或 OpenAI API Key。
 
 本扩展不会转录音频；视频必须提供 YouTube 原生/自动字幕或哔哩哔哩 CC/AI 字幕。哔哩哔哩可能要求视频页面保持登录，播放器才会返回字幕轨道。

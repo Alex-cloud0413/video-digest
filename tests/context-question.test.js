@@ -86,10 +86,10 @@ test("all three side-panel sources expose Ask and save-to-Notes actions", () => 
   const background = read("background.js");
   const prompt = read("prompts/context-question.md");
 
-  assert.match(panel, /sourceLabel: "Transcript"/);
-  assert.match(panel, /sourceLabel: "Overview chapter"/);
-  assert.match(panel, /sourceLabel: "Overview quote"/);
-  assert.match(panel, /sourceLabel: "Saved note"/);
+  assert.match(panel, /sourceLabel: t\("sourceTranscript"\)/);
+  assert.match(panel, /sourceLabel: t\("sourceOverviewChapter"\)/);
+  assert.match(panel, /sourceLabel: t\("sourceOverviewQuote"\)/);
+  assert.match(panel, /sourceLabel: t\("sourceSavedNote"\)/);
   assert.match(panel, /action: "askContextQuestion"/);
   assert.match(panel, /action: "saveQuestionAnswerNote"/);
   assert.match(background, /handleContextQuestion/);

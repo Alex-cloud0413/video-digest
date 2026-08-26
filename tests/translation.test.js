@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const sidepanelI18n = require("../sidepanel-i18n.js");
 
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -52,6 +53,7 @@ function loadSidepanelHelpers({
       tabs: { onUpdated: listeners, onActivated: listeners },
     },
     YTD_SETTINGS: {},
+    VIDEO_DIGEST_I18N: sidepanelI18n,
   };
   sandbox.globalThis = sandbox;
   vm.runInNewContext(read("sidepanel.js"), sandbox);
@@ -117,8 +119,8 @@ test("transcript header exposes original, Chinese, and bilingual modes", () => {
   const html = read("sidepanel.html");
   const js = read("sidepanel.js");
   assert.match(html, /data-transcript-mode="original"[\s\S]*?>Original</);
-  assert.match(html, /data-transcript-mode="zh"[\s\S]*?>中文</);
-  assert.match(html, /data-transcript-mode="bilingual"[\s\S]*?>双语</);
+  assert.match(html, /data-transcript-mode="zh"[\s\S]*?data-i18n="chinese"[\s\S]*?>Chinese</);
+  assert.match(html, /data-transcript-mode="bilingual"[\s\S]*?data-i18n="bilingual"[\s\S]*?>Bilingual</);
   assert.match(js, /contentType: "transcriptBatch"/);
 });
 
@@ -262,7 +264,7 @@ test("translation message watchdog uses the bridge hard limit", async () => {
   const request = helpers.sendTranslationMessage({ action: "translateContent" });
   assert.equal(timeoutDelay, 190_000);
   timeoutCallback();
-  await assert.rejects(request, /timed out after 190 seconds.*Retry/i);
+  await assert.rejects(request, /timed out after 190 seconds.*try again/i);
   assert.equal(clearCount, 1);
 });
 

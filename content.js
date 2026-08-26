@@ -231,7 +231,7 @@ function createDigestButton() {
   const digestButton = document.createElement("button");
   digestButton.id = "ytd-digest-button";
   digestButton.type = "button";
-  digestButton.setAttribute("aria-label", "Open YouTube Digest");
+  digestButton.setAttribute("aria-label", "Open Video Digest");
   digestButton.innerHTML = `
     <span class="ytd-digest-icon" style="font-size: 11px;">▶</span>
     <span class="ytd-digest-label">Digest</span>

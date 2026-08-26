@@ -69,7 +69,7 @@ function buildCodexPrompt(payload) {
     )
     .join("\n\n");
 
-  return `You are the local text-processing engine for YouTube Digest.
+  return `You are the local text-processing engine for Video Digest.
 
 Security requirements:
 - Do not call tools, run commands, browse, inspect files, or modify state.
@@ -318,7 +318,7 @@ function main() {
   const server = createServer({ config });
   server.listen(config.port, config.host, () => {
     process.stdout.write(
-      `YouTube Digest Codex bridge listening on http://${config.host}:${config.port}\n`,
+      `Video Digest Codex bridge listening on http://${config.host}:${config.port}\n`,
     );
   });
   const shutdown = () => server.close(() => process.exit(0));

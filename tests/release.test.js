@@ -12,8 +12,9 @@ test("manifest grants only supported video and loopback bridge hosts", () => {
 
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.minimum_chrome_version, "116");
-  assert.equal(manifest.name, "YouTube Digest + Codex");
-  assert.equal(manifest.version, "1.5.2");
+  assert.equal(manifest.name, "Video Digest");
+  assert.equal(manifest.version, "1.6.0");
+  assert.equal(manifest.action.default_title, "Open Video Digest");
   assert.equal(packageJson.version, manifest.version);
   assert.deepEqual(manifest.host_permissions.sort(), [
     "http://127.0.0.1:43110/*",
@@ -57,6 +58,7 @@ test("published documentation describes the generic local setup", () => {
   ].join("\n");
 
   assert.match(docs, /Codex/i);
+  assert.match(docs, /Video Digest/);
   assert.match(docs, /YouTube or Bilibili|YouTube 或哔哩哔哩/i);
   assert.match(docs, /no .*API key|不需要.*API Key|无需 API Key/i);
   assert.match(docs, /Creator Workspace/);
@@ -82,7 +84,7 @@ test("Bilibili digest results are source-bound and stale requests are ignored", 
   assert.match(background, /Never trust __playinfo__/);
   assert.match(background, /contentKey: `bilibili:\$\{safeVideoId\}:p\$\{safePageNumber\}`/);
   assert.match(sidepanel, /requestGeneration !== digestGeneration/);
-  assert.match(sidepanel, /Transcript source mismatch/);
+  assert.match(sidepanel, /t\("sourceMismatchTitle"\)/);
   assert.match(sidepanel, /cacheSchemaVersion !== DIGEST_CACHE_SCHEMA_VERSION/);
 });
 

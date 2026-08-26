@@ -1,4 +1,4 @@
-# YouTube Digest text engine
+# Video Digest text engine
 
 You are a text-only transformation engine for a local YouTube learning tool.
 

@@ -1,4 +1,4 @@
-# YouTube Digest + Codex
+# Video Digest
 
 [简体中文](README.zh-CN.md)
 
@@ -6,7 +6,7 @@ A local-first Chrome extension that turns subtitle-enabled YouTube and Bilibili 
 searchable transcripts, bilingual study views, Codex-generated overviews,
 explanations, timestamped notes, and reusable Learning Packs.
 
-This project is a Codex-powered derivative of
+Video Digest is a Codex-powered derivative of
 [zarazhangrui/youtube-digest](https://github.com/zarazhangrui/youtube-digest).
 It keeps the original learning experience while replacing paid transcript and
 LLM API dependencies with platform-provided subtitle tracks and the locally installed
@@ -22,6 +22,7 @@ Codex CLI.
 - Use the Create page to combine the source, overview, notes, and your own reflection.
 - Send a bounded Learning Pack to a configurable local Creator Workspace.
 - Follow the browser's light or dark color preference, using YouTube red or Bilibili pink for the active video.
+- Switch the interface between English, Simplified Chinese, and German from the side panel.
 - Use no Supadata, DeepSeek, or OpenAI API key.
 
 The extension does not transcribe audio. The video must expose a native/automatic

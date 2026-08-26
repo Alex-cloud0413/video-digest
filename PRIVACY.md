@@ -1,6 +1,6 @@
 # Privacy
 
-YouTube Digest + Codex has no account system, advertising, analytics, or telemetry.
+Video Digest has no account system, advertising, analytics, or telemetry.
 
 ## Data processed
 
