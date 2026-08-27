@@ -55,8 +55,8 @@ Codex requests count against the limits of the signed-in ChatGPT plan.
 ## Install
 
 ```bash
-git clone https://github.com/Alex-cloud0413/youtube-digest-codex.git
-cd youtube-digest-codex
+git clone https://github.com/Alex-cloud0413/video-digest.git
+cd video-digest
 node bridge/generate-config.js
 node bridge/server.js
 ```
@@ -98,6 +98,11 @@ always writes below:
 The destination is controlled by the local bridge configuration, never by a
 browser request. The bridge rejects request-supplied paths, transcript fields,
 and attempts to set `articleIntent` to true.
+
+The `youtube-digest` inbox segment and the `youtube-digest-codex-local` producer
+value are legacy-stable internal identifiers. They remain unchanged so existing
+Learning Packs and Creator Workspace automations continue to work after the
+public product and repository rename to Video Digest.
 
 A Learning Pack contains:
 

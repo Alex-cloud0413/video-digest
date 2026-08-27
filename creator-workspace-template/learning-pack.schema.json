@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Alex-cloud0413/youtube-digest-codex/blob/main/creator-workspace-template/learning-pack.schema.json",
+  "$id": "https://github.com/Alex-cloud0413/video-digest/blob/main/creator-workspace-template/learning-pack.schema.json",
   "title": "Video Digest Learning Pack",
   "type": "object",
   "additionalProperties": false,

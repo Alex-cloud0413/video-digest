@@ -177,7 +177,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
  * Injects a "Digest" button into YouTube's action bar.
  * The button appears next to Share, Save, etc. below the video.
  *
- * When clicked, it opens the YouTube Digest side panel.
+ * When clicked, it opens the Video Digest side panel.
  */
 function isVisibleDigestHost(element) {
   if (!element || !element.isConnected) return false;

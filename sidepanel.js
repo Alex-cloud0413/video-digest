@@ -1,7 +1,7 @@
 /**
  * SIDE PANEL LOGIC
  *
- * Handles the UI for YouTube Digest: video detection, transcript analysis,
+ * Handles the UI for Video Digest: video detection, transcript analysis,
  * rendering results, and export features.
  */
 

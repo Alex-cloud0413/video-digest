@@ -48,8 +48,8 @@ Codex 请求会计入当前 ChatGPT 套餐的使用额度。
 ## 安装
 
 ```bash
-git clone https://github.com/Alex-cloud0413/youtube-digest-codex.git
-cd youtube-digest-codex
+git clone https://github.com/Alex-cloud0413/video-digest.git
+cd video-digest
 node bridge/generate-config.js
 node bridge/server.js
 ```
@@ -88,6 +88,8 @@ bridge/workspace-config.json
 ```
 
 目标目录只能由本机连接程序配置，浏览器请求不能传入路径。连接程序还会拒绝完整字幕字段，以及把 `articleIntent` 改成 true 的请求。
+
+其中 `youtube-digest` inbox 路径与 `youtube-digest-codex-local` producer 值是为兼容既有 Learning Pack 和 Creator Workspace 自动化而保留的稳定内部标识；对外产品名与仓库名均已改为 Video Digest。
 
 Learning Pack 可以包含：
 

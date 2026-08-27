@@ -6,7 +6,7 @@ publishable work without automatically treating every note as an article.
 ```text
 creator-workspace/
 ├── inbox/
-│   └── youtube-digest/   # Learning Packs arrive here
+│   └── youtube-digest/   # Legacy-stable inbox ID; Video Digest packs arrive here
 ├── ideas/                # Optional claims and content seeds
 ├── projects/             # Explicitly started creation projects
 └── published/            # Publication records or final exports
@@ -26,6 +26,9 @@ creator-workspace/
 
 The extension performs only steps 1 and 2. Everything after the handoff belongs
 to the user's own tools, agent workflow, or editorial process.
+
+The `youtube-digest` directory name is a legacy-stable internal identifier kept
+for compatibility after the public project was renamed to Video Digest.
 
 ## Learning Pack contract
 
