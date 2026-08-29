@@ -521,6 +521,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === "getPlaybackState") {
+    getVideoPlaybackStateInTab(message.tabId)
+      .then(sendResponse)
+      .catch((error) =>
+        sendResponse({
+          success: false,
+          error: error?.message || "Video playback state is unavailable",
+        }),
+      );
+    return true;
+  }
+
   // Relay messages from side panel to content script
   if (message.action === "relayToContent") {
     debugLog("[YouTube Digest BG] Relay request:", message.payload?.action);
@@ -675,6 +687,57 @@ async function seekVideoInTab(tabId, seconds) {
   return results?.[0]?.result || {
     success: false,
     error: "The video page returned no seek result",
+  };
+}
+
+/**
+ * Reads playback state directly from the page instead of depending on a
+ * content-script receiver. Existing video tabs do not automatically receive a
+ * newly reloaded extension's content script, so direct page execution keeps
+ * transcript following alive across extension reloads and tab restoration.
+ */
+async function getVideoPlaybackStateInTab(tabId) {
+  if (!Number.isInteger(tabId)) {
+    return { success: false, error: "Invalid video tab" };
+  }
+
+  const tab = await chrome.tabs.get(tabId);
+  if (!YTD_PLATFORMS.isSupportedVideoUrl(tab?.url || "")) {
+    return { success: false, error: "The target tab is not a supported video" };
+  }
+
+  const results = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    func: () => {
+      const videos = [...document.querySelectorAll("video")];
+      const video =
+        document.querySelector("video.html5-main-video") ||
+        videos.find((candidate) => candidate.readyState > 0) ||
+        videos[0];
+      if (!video) {
+        return { success: false, error: "No video player found" };
+      }
+
+      const currentTime = Number(video.currentTime);
+      if (!Number.isFinite(currentTime)) {
+        return { success: false, error: "Video time is unavailable" };
+      }
+
+      return {
+        success: true,
+        currentTime,
+        paused: Boolean(video.paused),
+        duration: Number.isFinite(Number(video.duration))
+          ? Number(video.duration)
+          : 0,
+      };
+    },
+  });
+
+  return results?.[0]?.result || {
+    success: false,
+    error: "The video page returned no playback state",
   };
 }
 
@@ -895,13 +958,24 @@ async function getTranscriptRowsFromYouTubePanel(tabId, videoId, expectedDuratio
         return parts.reduce((total, part) => total * 60 + part, 0);
       };
       const collectRows = () =>
-        [...document.querySelectorAll("ytd-transcript-segment-renderer")]
+        [
+          ...document.querySelectorAll(
+            "ytd-transcript-segment-renderer, transcript-segment-view-model",
+          ),
+        ]
           .map((segment) => {
             const timestamp =
-              segment.querySelector(".segment-timestamp")?.textContent || "";
+              segment.querySelector(
+                ".segment-timestamp, .ytwTranscriptSegmentViewModelTimestamp",
+              )?.textContent || "";
             const start = parseTimestamp(timestamp);
             const text =
-              segment.querySelector(".segment-text")?.textContent?.replace(/\s+/g, " ").trim() ||
+              segment
+                .querySelector(
+                  ".segment-text, .ytAttributedStringHost[role='text']",
+                )
+                ?.textContent?.replace(/\s+/g, " ")
+                .trim() ||
               "";
             return start === null || !text ? null : { start, text };
           })
@@ -909,9 +983,14 @@ async function getTranscriptRowsFromYouTubePanel(tabId, videoId, expectedDuratio
           .slice(0, 50_000);
       const playerMatches = () => {
         const player = document.getElementById("movie_player");
+        const playerVideoId =
+          player?.getPlayerResponse?.()?.videoDetails?.videoId ||
+          player?.getVideoData?.()?.video_id ||
+          "";
+        const urlVideoId = new URL(location.href).searchParams.get("v");
         return (
-          player?.getPlayerResponse?.()?.videoDetails?.videoId === expectedVideoId &&
-          new URL(location.href).searchParams.get("v") === expectedVideoId
+          urlVideoId === expectedVideoId &&
+          (!playerVideoId || playerVideoId === expectedVideoId)
         );
       };
       const rowsFitCurrentVideo = (rows) => {
@@ -1473,7 +1552,7 @@ async function handleFetchYouTubeTranscript(source) {
       };
     }
     const videoDetails = await getPlayerVideoDetails(tab.id);
-    if (videoDetails?.videoId !== videoId) {
+    if (videoDetails && videoDetails.videoId !== videoId) {
       return {
         success: false,
         error: "SOURCE_MISMATCH",
@@ -1482,22 +1561,18 @@ async function handleFetchYouTubeTranscript(source) {
     }
     const tracks = await getCaptionTracksFromPlayer(tab.id, videoId);
     const track = selectCaptionTrack(tracks);
-    if (!track) {
-      return {
-        success: false,
-        error: "NO_TRANSCRIPT",
-        message: "This video does not expose an available subtitle track.",
-      };
+    let transcript = [];
+    if (track) {
+      const pagePayload = await fetchCaptionPayloadInPage(tab.id, track.baseUrl);
+      transcript = pagePayload.ok
+        ? parseYouTubeCaptionPayload(pagePayload.payload, track.languageCode)
+        : [];
     }
-    const pagePayload = await fetchCaptionPayloadInPage(tab.id, track.baseUrl);
-    let transcript = pagePayload.ok
-      ? parseYouTubeCaptionPayload(pagePayload.payload, track.languageCode)
-      : [];
     if (!transcript.length) {
       const panelResult = await getTranscriptRowsFromYouTubePanel(
         tab.id,
         videoId,
-        videoDetails.duration,
+        videoDetails?.duration || 0,
       );
       if (panelResult.ok) {
         transcript = panelResult.rows.map((row, index, rows) => ({
@@ -1507,7 +1582,7 @@ async function handleFetchYouTubeTranscript(source) {
             0,
             Number(rows[index + 1]?.start) - Number(row.start) || 0,
           ),
-          language: track.languageCode || null,
+          language: track?.languageCode || null,
         }));
       }
     }
@@ -1520,24 +1595,25 @@ async function handleFetchYouTubeTranscript(source) {
       };
     }
     const finalDetails = await getPlayerVideoDetails(tab.id);
-    if (finalDetails?.videoId !== videoId) {
+    if (finalDetails && finalDetails.videoId !== videoId) {
       return {
         success: false,
         error: "SOURCE_MISMATCH",
         message: "The YouTube player changed while its subtitles were loading.",
       };
     }
+    const resolvedDetails = finalDetails || videoDetails || {};
     return {
-      ...buildTranscriptResult(transcript, track.languageCode),
+      ...buildTranscriptResult(transcript, track?.languageCode || null),
       videoInfo: {
         platform: "youtube",
         videoId,
         pageNumber: 1,
         contentKey: `youtube:${videoId}`,
-        title: finalDetails.title || "",
-        channelName: finalDetails.channelName || "",
-        description: finalDetails.description || "",
-        duration: Number(finalDetails.duration) || 0,
+        title: resolvedDetails.title || "",
+        channelName: resolvedDetails.channelName || "",
+        description: resolvedDetails.description || "",
+        duration: Number(resolvedDetails.duration) || 0,
       },
     };
   } catch (error) {
@@ -2491,6 +2567,7 @@ globalThis.__YTD_DIRECT_TRANSCRIPT_TESTING__ = {
   parseYouTubeCaptionPayload,
   parseYouTubeJson3,
   parseYouTubeXml,
+  getVideoPlaybackStateInTab,
   seekVideoInTab,
   selectCaptionTrack,
 };

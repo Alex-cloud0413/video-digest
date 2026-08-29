@@ -1,6 +1,6 @@
 {
   "name": "video-digest",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "private": true,
   "description": "YouTube and Bilibili learning extension with direct subtitles, local Codex or TraeWork features, and Creator Workspace handoff.",
   "license": "MIT",

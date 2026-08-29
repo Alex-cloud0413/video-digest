@@ -13,7 +13,7 @@ test("manifest grants only supported video and loopback bridge hosts", () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.minimum_chrome_version, "116");
   assert.equal(manifest.name, "Video Digest");
-  assert.equal(manifest.version, "1.7.0");
+  assert.equal(manifest.version, "1.7.1");
   assert.equal(manifest.action.default_title, "Open Video Digest");
   assert.equal(packageJson.version, manifest.version);
   assert.deepEqual(manifest.host_permissions.sort(), [
@@ -86,7 +86,14 @@ test("digest results are source-bound and stale requests are ignored", () => {
   assert.match(background, /contentKey: `bilibili:\$\{safeVideoId\}:p\$\{safePageNumber\}`/);
   assert.match(background, /contentKey: `youtube:\$\{videoId\}`/);
   assert.match(background, /findYouTubeTabForVideo\(videoId, source\?\.tabId\)/);
-  assert.match(background, /finalDetails\?\.videoId !== videoId/);
+  assert.match(
+    background,
+    /if \(finalDetails && finalDetails\.videoId !== videoId\)/,
+  );
+  assert.match(
+    background,
+    /urlVideoId === expectedVideoId &&\s+\(!playerVideoId \|\| playerVideoId === expectedVideoId\)/,
+  );
   assert.match(sidepanel, /requestGeneration !== digestGeneration/);
   assert.match(sidepanel, /t\("sourceMismatchTitle"\)/);
   assert.match(sidepanel, /cacheSchemaVersion !== DIGEST_CACHE_SCHEMA_VERSION/);

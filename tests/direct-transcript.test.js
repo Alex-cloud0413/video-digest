@@ -6,6 +6,10 @@ const vm = require("node:vm");
 const platforms = require("../platforms.js");
 
 const root = path.resolve(__dirname, "..");
+const backgroundSource = fs.readFileSync(
+  path.join(root, "background.js"),
+  "utf8",
+);
 
 function loadHelpers({
   fetchImpl = fetch,
@@ -202,6 +206,70 @@ test("timestamp seeking rejects unsupported tabs before page execution", async (
   assert.equal(result.success, false);
   assert.match(result.error, /not a supported video/i);
   assert.equal(executed, false);
+});
+
+test("playback state is read directly without a content-script receiver", async () => {
+  const helpers = loadHelpers({
+    getTab: async (tabId) => ({
+      id: tabId,
+      url: "https://www.bilibili.com/video/BV1qQBjBKEj2",
+    }),
+    pageGlobals: {
+      document: {
+        querySelector: () => ({
+          currentTime: 48.25,
+          duration: 314,
+          paused: false,
+          readyState: 4,
+        }),
+        querySelectorAll: () => [],
+      },
+    },
+  });
+
+  const result = await helpers.getVideoPlaybackStateInTab(42);
+  assert.equal(result.success, true);
+  assert.equal(result.currentTime, 48.25);
+  assert.equal(result.duration, 314);
+  assert.equal(result.paused, false);
+});
+
+test("playback state rejects unsupported tabs before page execution", async () => {
+  let executed = false;
+  const helpers = loadHelpers({
+    getTab: async () => ({ id: 42, url: "https://example.com/video" }),
+    executeScript: async () => {
+      executed = true;
+      return [];
+    },
+  });
+
+  const result = await helpers.getVideoPlaybackStateInTab(42);
+  assert.equal(result.success, false);
+  assert.equal(executed, false);
+});
+
+test("YouTube transcript fallback supports the current and legacy row components", () => {
+  assert.match(
+    backgroundSource,
+    /ytd-transcript-segment-renderer, transcript-segment-view-model/,
+  );
+  assert.match(
+    backgroundSource,
+    /\.segment-timestamp, \.ytwTranscriptSegmentViewModelTimestamp/,
+  );
+  assert.match(
+    backgroundSource,
+    /\.segment-text, \.ytAttributedStringHost\[role='text'\]/,
+  );
+  assert.match(
+    backgroundSource,
+    /const track = selectCaptionTrack\(tracks\);\s+let transcript = \[\];\s+if \(track\)/,
+  );
+  assert.match(
+    backgroundSource,
+    /if \(!transcript\.length\) \{\s+const panelResult = await getTranscriptRowsFromYouTubePanel/,
+  );
 });
 
 test("YouTube JSON3 captions become seekable transcript rows", () => {
