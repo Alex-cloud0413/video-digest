@@ -8,6 +8,9 @@ const path = require("node:path");
 const { spawn } = require("node:child_process");
 const { validateLearningPack } = require("../learning-pack.js");
 const {
+  DoubaoWorkAppleEventsController,
+} = require("./doubaowork-applescript.js");
+const {
   isInboxWritable,
   loadCreatorHandoffRoot,
   writeLearningPack,
@@ -22,6 +25,7 @@ const EXTENSION_ORIGIN = /^chrome-extension:\/\/[a-p]{32}$/;
 const PROVIDERS = Object.freeze({
   CODEX: "codex-local",
   TRAEWORK: "traework-local",
+  DOUBAOWORK: "doubaowork-local",
 });
 const TRAEWORK_CANDIDATES = Object.freeze([
   path.join(os.homedir(), ".local", "bin", "traex"),
@@ -92,6 +96,13 @@ function getProviderStatuses(options = {}) {
     [PROVIDERS.TRAEWORK]: {
       available: Boolean(resolveTraeWorkPath(options)),
       mode: "inline",
+    },
+    [PROVIDERS.DOUBAOWORK]: options.doubaoWorkController?.getStatus() || {
+      available: false,
+      mode: "inline",
+      installed: false,
+      automation: false,
+      client: "",
     },
   };
 }
@@ -340,6 +351,14 @@ function runTraeWork(payload, options = {}) {
   });
 }
 
+function runDoubaoWork(payload, options = {}) {
+  const controller = options.doubaoWorkController;
+  if (!controller) {
+    return Promise.reject(new Error("Doubao Work automation is not running"));
+  }
+  return controller.requestCompletion(buildCodexPrompt(payload));
+}
+
 class SerialQueue {
   constructor(limit = MAX_QUEUE_DEPTH) {
     this.limit = limit;
@@ -387,12 +406,15 @@ function createServer({
   config = loadConfig(),
   runner = runCodex,
   traeWorkRunner = runTraeWork,
-  providerStatus = getProviderStatuses,
+  doubaoWorkController = new DoubaoWorkAppleEventsController(),
+  doubaoWorkRunner = (payload) =>
+    runDoubaoWork(payload, { doubaoWorkController }),
+  providerStatus = () => getProviderStatuses({ doubaoWorkController }),
   handoffRoot = loadCreatorHandoffRoot(),
   handoffWriter = writeLearningPack,
 } = {}) {
   const queue = new SerialQueue();
-  return http.createServer((request, response) => {
+  return http.createServer(async (request, response) => {
     const origin = request.headers.origin || "";
     const validOrigin = !origin || EXTENSION_ORIGIN.test(origin);
     if (origin && validOrigin) {
@@ -469,11 +491,11 @@ function createServer({
           return;
         }
         const provider = validateProvider(payload?.provider);
-        const result = await queue.add(() =>
-          provider === PROVIDERS.TRAEWORK
-            ? traeWorkRunner(payload)
-            : runner(payload),
-        );
+        const result = await queue.add(() => {
+          if (provider === PROVIDERS.TRAEWORK) return traeWorkRunner(payload);
+          if (provider === PROVIDERS.DOUBAOWORK) return doubaoWorkRunner(payload);
+          return runner(payload);
+        });
         sendJson(200, { ok: true, text: result });
       } catch (error) {
         const message = error?.message || "Local AI request failed";
@@ -516,6 +538,7 @@ module.exports = {
   resolveExecutable,
   resolveTraeWorkPath,
   runCodex,
+  runDoubaoWork,
   runTraeWork,
   safeEqual,
   validateProvider,

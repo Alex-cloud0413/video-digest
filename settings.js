@@ -9,6 +9,7 @@ var YTD_SETTINGS = (() => {
   const PROVIDERS = Object.freeze({
     CODEX: "codex-local",
     TRAEWORK: "traework-local",
+    DOUBAOWORK: "doubaowork-local",
   });
   const SUPPORTED_PROVIDERS = new Set(Object.values(PROVIDERS));
   const DEFAULTS = Object.freeze({

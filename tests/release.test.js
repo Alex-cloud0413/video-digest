@@ -13,7 +13,7 @@ test("manifest grants only supported video and loopback bridge hosts", () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.minimum_chrome_version, "116");
   assert.equal(manifest.name, "Video Digest");
-  assert.equal(manifest.version, "1.7.0");
+  assert.equal(manifest.version, "1.8.0");
   assert.equal(manifest.action.default_title, "Open Video Digest");
   assert.equal(packageJson.version, manifest.version);
   assert.deepEqual(manifest.host_permissions.sort(), [
