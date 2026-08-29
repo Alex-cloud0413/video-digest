@@ -6,6 +6,10 @@ const vm = require("node:vm");
 const platforms = require("../platforms.js");
 
 const root = path.resolve(__dirname, "..");
+const backgroundSource = fs.readFileSync(
+  path.join(root, "background.js"),
+  "utf8",
+);
 
 function loadHelpers({
   fetchImpl = fetch,
@@ -243,6 +247,29 @@ test("playback state rejects unsupported tabs before page execution", async () =
   const result = await helpers.getVideoPlaybackStateInTab(42);
   assert.equal(result.success, false);
   assert.equal(executed, false);
+});
+
+test("YouTube transcript fallback supports the current and legacy row components", () => {
+  assert.match(
+    backgroundSource,
+    /ytd-transcript-segment-renderer, transcript-segment-view-model/,
+  );
+  assert.match(
+    backgroundSource,
+    /\.segment-timestamp, \.ytwTranscriptSegmentViewModelTimestamp/,
+  );
+  assert.match(
+    backgroundSource,
+    /\.segment-text, \.ytAttributedStringHost\[role='text'\]/,
+  );
+  assert.match(
+    backgroundSource,
+    /const track = selectCaptionTrack\(tracks\);\s+let transcript = \[\];\s+if \(track\)/,
+  );
+  assert.match(
+    backgroundSource,
+    /if \(!transcript\.length\) \{\s+const panelResult = await getTranscriptRowsFromYouTubePanel/,
+  );
 });
 
 test("YouTube JSON3 captions become seekable transcript rows", () => {

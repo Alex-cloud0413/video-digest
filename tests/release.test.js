@@ -86,7 +86,14 @@ test("digest results are source-bound and stale requests are ignored", () => {
   assert.match(background, /contentKey: `bilibili:\$\{safeVideoId\}:p\$\{safePageNumber\}`/);
   assert.match(background, /contentKey: `youtube:\$\{videoId\}`/);
   assert.match(background, /findYouTubeTabForVideo\(videoId, source\?\.tabId\)/);
-  assert.match(background, /finalDetails\?\.videoId !== videoId/);
+  assert.match(
+    background,
+    /if \(finalDetails && finalDetails\.videoId !== videoId\)/,
+  );
+  assert.match(
+    background,
+    /urlVideoId === expectedVideoId &&\s+\(!playerVideoId \|\| playerVideoId === expectedVideoId\)/,
+  );
   assert.match(sidepanel, /requestGeneration !== digestGeneration/);
   assert.match(sidepanel, /t\("sourceMismatchTitle"\)/);
   assert.match(sidepanel, /cacheSchemaVersion !== DIGEST_CACHE_SCHEMA_VERSION/);

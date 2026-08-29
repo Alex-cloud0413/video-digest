@@ -958,13 +958,24 @@ async function getTranscriptRowsFromYouTubePanel(tabId, videoId, expectedDuratio
         return parts.reduce((total, part) => total * 60 + part, 0);
       };
       const collectRows = () =>
-        [...document.querySelectorAll("ytd-transcript-segment-renderer")]
+        [
+          ...document.querySelectorAll(
+            "ytd-transcript-segment-renderer, transcript-segment-view-model",
+          ),
+        ]
           .map((segment) => {
             const timestamp =
-              segment.querySelector(".segment-timestamp")?.textContent || "";
+              segment.querySelector(
+                ".segment-timestamp, .ytwTranscriptSegmentViewModelTimestamp",
+              )?.textContent || "";
             const start = parseTimestamp(timestamp);
             const text =
-              segment.querySelector(".segment-text")?.textContent?.replace(/\s+/g, " ").trim() ||
+              segment
+                .querySelector(
+                  ".segment-text, .ytAttributedStringHost[role='text']",
+                )
+                ?.textContent?.replace(/\s+/g, " ")
+                .trim() ||
               "";
             return start === null || !text ? null : { start, text };
           })
@@ -972,9 +983,14 @@ async function getTranscriptRowsFromYouTubePanel(tabId, videoId, expectedDuratio
           .slice(0, 50_000);
       const playerMatches = () => {
         const player = document.getElementById("movie_player");
+        const playerVideoId =
+          player?.getPlayerResponse?.()?.videoDetails?.videoId ||
+          player?.getVideoData?.()?.video_id ||
+          "";
+        const urlVideoId = new URL(location.href).searchParams.get("v");
         return (
-          player?.getPlayerResponse?.()?.videoDetails?.videoId === expectedVideoId &&
-          new URL(location.href).searchParams.get("v") === expectedVideoId
+          urlVideoId === expectedVideoId &&
+          (!playerVideoId || playerVideoId === expectedVideoId)
         );
       };
       const rowsFitCurrentVideo = (rows) => {
@@ -1536,7 +1552,7 @@ async function handleFetchYouTubeTranscript(source) {
       };
     }
     const videoDetails = await getPlayerVideoDetails(tab.id);
-    if (videoDetails?.videoId !== videoId) {
+    if (videoDetails && videoDetails.videoId !== videoId) {
       return {
         success: false,
         error: "SOURCE_MISMATCH",
@@ -1545,22 +1561,18 @@ async function handleFetchYouTubeTranscript(source) {
     }
     const tracks = await getCaptionTracksFromPlayer(tab.id, videoId);
     const track = selectCaptionTrack(tracks);
-    if (!track) {
-      return {
-        success: false,
-        error: "NO_TRANSCRIPT",
-        message: "This video does not expose an available subtitle track.",
-      };
+    let transcript = [];
+    if (track) {
+      const pagePayload = await fetchCaptionPayloadInPage(tab.id, track.baseUrl);
+      transcript = pagePayload.ok
+        ? parseYouTubeCaptionPayload(pagePayload.payload, track.languageCode)
+        : [];
     }
-    const pagePayload = await fetchCaptionPayloadInPage(tab.id, track.baseUrl);
-    let transcript = pagePayload.ok
-      ? parseYouTubeCaptionPayload(pagePayload.payload, track.languageCode)
-      : [];
     if (!transcript.length) {
       const panelResult = await getTranscriptRowsFromYouTubePanel(
         tab.id,
         videoId,
-        videoDetails.duration,
+        videoDetails?.duration || 0,
       );
       if (panelResult.ok) {
         transcript = panelResult.rows.map((row, index, rows) => ({
@@ -1570,7 +1582,7 @@ async function handleFetchYouTubeTranscript(source) {
             0,
             Number(rows[index + 1]?.start) - Number(row.start) || 0,
           ),
-          language: track.languageCode || null,
+          language: track?.languageCode || null,
         }));
       }
     }
@@ -1583,24 +1595,25 @@ async function handleFetchYouTubeTranscript(source) {
       };
     }
     const finalDetails = await getPlayerVideoDetails(tab.id);
-    if (finalDetails?.videoId !== videoId) {
+    if (finalDetails && finalDetails.videoId !== videoId) {
       return {
         success: false,
         error: "SOURCE_MISMATCH",
         message: "The YouTube player changed while its subtitles were loading.",
       };
     }
+    const resolvedDetails = finalDetails || videoDetails || {};
     return {
-      ...buildTranscriptResult(transcript, track.languageCode),
+      ...buildTranscriptResult(transcript, track?.languageCode || null),
       videoInfo: {
         platform: "youtube",
         videoId,
         pageNumber: 1,
         contentKey: `youtube:${videoId}`,
-        title: finalDetails.title || "",
-        channelName: finalDetails.channelName || "",
-        description: finalDetails.description || "",
-        duration: Number(finalDetails.duration) || 0,
+        title: resolvedDetails.title || "",
+        channelName: resolvedDetails.channelName || "",
+        description: resolvedDetails.description || "",
+        duration: Number(resolvedDetails.duration) || 0,
       },
     };
   } catch (error) {
