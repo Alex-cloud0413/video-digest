@@ -3,13 +3,16 @@
 ## Local bridge boundary
 
 The helper binds only to `127.0.0.1`, validates Chrome extension origins, and
-requires a randomly generated installation capability. Codex runs ephemerally
-in a dedicated runtime directory with a read-only sandbox, user rules ignored,
-and tools prohibited. Requests are serialized and bounded by size and time.
+requires a randomly generated installation capability. Codex and Trae CLI 2.0
+run ephemerally in a dedicated runtime directory with a read-only sandbox and
+user configuration and rules ignored. Requests are serialized and bounded by
+size and time.
 
 Transcript text and other model inputs are untrusted data. The helper wraps
-them in explicit boundaries and instructs Codex not to follow embedded commands,
-links, or tool requests.
+them in explicit boundaries and instructs either provider not to follow embedded
+commands, links, or tool requests. Both CLIs receive the same wrapped prompt over
+stdin so large transcripts never become shell arguments. Only the final Trae CLI
+message file is returned; diagnostic stdout and stderr remain inside the helper.
 
 ## Creator Workspace boundary
 
@@ -35,7 +38,7 @@ run `node bridge/generate-config.js`, reload the extension, and restart the help
 
 The Chrome manifest permits only YouTube/Bilibili video and subtitle hosts plus the loopback helper.
 The helper must never listen on a LAN or public interface. Any change to the
-host, port, origin policy, Codex sandbox, or write-root rules requires a new
+host, port, origin policy, provider allowlist, provider sandbox, CLI flags, or write-root rules requires a new
 security review.
 
 ## Reporting

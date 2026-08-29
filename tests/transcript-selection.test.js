@@ -7,6 +7,10 @@ const source = fs.readFileSync(
   path.resolve(__dirname, "..", "sidepanel.js"),
   "utf8",
 );
+const backgroundSource = fs.readFileSync(
+  path.resolve(__dirname, "..", "background.js"),
+  "utf8",
+);
 
 test("all timestamped transcript row clicks use the selection-aware seek helper", () => {
   assert.match(
@@ -49,5 +53,20 @@ test("the Explain tooltip preserves selection and contains pointer events", () =
   assert.match(
     source,
     /\.addEventListener\("click", async \(event\) => \{\s+event\.preventDefault\(\);\s+event\.stopPropagation\(\);/,
+  );
+});
+
+test("timestamp clicks use the background's verified page-level seek path", () => {
+  assert.match(
+    source,
+    /chrome\.runtime\.sendMessage\(\{\s+action: "seekVideo",\s+tabId: videoTabId,\s+seconds: Math\.max\(0, targetSeconds\)/,
+  );
+  assert.match(
+    source,
+    /if \(!result\?\.success\) \{\s+throw new Error/,
+  );
+  assert.match(
+    backgroundSource,
+    /async function seekVideoInTab\(tabId, seconds\)[\s\S]*?chrome\.scripting\.executeScript\(\{[\s\S]*?world: "MAIN"/,
   );
 });

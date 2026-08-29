@@ -167,7 +167,7 @@ test("background validates translation batch size and stable IDs", () => {
   );
 });
 
-test("AI requests use the authenticated local Codex bridge", async () => {
+test("AI requests send the selected provider through the authenticated local bridge", async () => {
   const calls = [];
   const helpers = loadBackgroundHelpers({
     fetchImpl: async (url, options) => {
@@ -192,6 +192,7 @@ test("AI requests use the authenticated local Codex bridge", async () => {
     "test-install-token",
   );
   assert.deepEqual(JSON.parse(calls[0].options.body), {
+    provider: "codex-local",
     messages: [{ role: "user", content: "Hello." }],
     maxTokens: 128,
     responseFormat: { type: "json_object" },

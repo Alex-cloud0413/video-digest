@@ -3,21 +3,21 @@
 [简体中文](README.zh-CN.md)
 
 A local-first Chrome extension that turns subtitle-enabled YouTube and Bilibili videos into
-searchable transcripts, bilingual study views, Codex-generated overviews,
+searchable transcripts, bilingual study views, AI-assisted overviews,
 explanations, timestamped notes, and reusable Learning Packs.
 
 Video Digest is a Codex-powered derivative of
 [zarazhangrui/youtube-digest](https://github.com/zarazhangrui/youtube-digest).
 It keeps the original learning experience while replacing paid transcript and
-LLM API dependencies with platform-provided subtitle tracks and the locally installed
-Codex CLI.
+LLM API dependencies with platform-provided subtitle tracks and either the locally
+installed Codex CLI or Trae CLI 2.0.
 
 ## Highlights
 
 - Read subtitle tracks exposed by the active YouTube or Bilibili player.
 - View the original transcript, Simplified Chinese, or an aligned bilingual view.
-- Generate chapters, key quotes, explanations, translations, and polished notes with Codex.
-- Ask focused questions about any transcript passage, Overview item, or saved Note, then save the Codex answer back to Notes.
+- Generate chapters, key quotes, explanations, translations, and polished notes with Codex or TraeWork.
+- Ask focused questions about any transcript passage, Overview item, or saved Note, then save either provider's answer back to Notes.
 - Save timestamped notes and navigate back to the matching point in the video.
 - Use the Create page to combine the source, overview, notes, and your own reflection.
 - Send a bounded Learning Pack to a configurable local Creator Workspace.
@@ -32,24 +32,26 @@ page to be signed in before its player exposes subtitles.
 ## How it works
 
 The extension reads subtitles from the active video page. AI actions go to a
-loopback-only helper on `127.0.0.1:43110`; the helper invokes the Codex CLI using
-the ChatGPT account already signed in on the computer.
+loopback-only helper on `127.0.0.1:43110`. In Settings, users choose either:
+
+- **Codex** — runs the Codex CLI and returns the result inside Video Digest.
+- **TraeWork** — runs Trae CLI 2.0 non-interactively and returns the final answer inside Video Digest.
 
 The helper:
 
 - listens only on the local loopback interface;
 - requires a randomly generated installation capability on every request;
 - accepts only local Chrome extension origins;
-- runs Codex ephemerally in a read-only sandbox with tools disabled;
+- runs the selected CLI ephemerally in a dedicated runtime directory and read-only sandbox, with user configuration and rules ignored;
 - serializes requests and limits request size, response size, and duration.
 
-Codex requests count against the limits of the signed-in ChatGPT plan.
+Requests count against the limits of the account signed into the selected provider.
 
 ## Requirements
 
 - Google Chrome 116 or newer
 - Node.js 18 or newer
-- The [Codex CLI](https://developers.openai.com/codex/cli) installed and signed in
+- At least one signed-in local AI provider: the [Codex CLI](https://developers.openai.com/codex/cli), or [Trae CLI 2.0](https://docs.trae.cn/cli_get-started-with-trae-code-cli-2)
 - A YouTube or Bilibili video with available captions
 
 ## Install
@@ -60,6 +62,9 @@ cd video-digest
 node bridge/generate-config.js
 node bridge/server.js
 ```
+
+Before selecting TraeWork, sign in from Terminal with `traecli login`. If CLI
+2.0 was installed alongside an older compatibility command, use `traex login`.
 
 Keep the last command running. Then:
 
@@ -123,7 +128,7 @@ tool-agnostic personal content workflow that can consume these packs.
 2. Read or translate the transcript.
 3. Open **Overview** for chapters and key quotes.
 4. Select transcript text for an explanation.
-5. Choose **Ask** on a transcript passage, chapter, key quote, or Note to ask Codex a focused question in the side panel.
+5. Choose **Ask** on a transcript passage, chapter, key quote, or Note. Both Codex and TraeWork answer inline.
 6. Save a useful answer to **Notes** with its source and timestamp preserved.
 7. Save timestamped notes from the player or a quote.
 8. Open **Create**, add your reflection, and send the Learning Pack when ready.
@@ -157,6 +162,6 @@ copyright notice is preserved in [LICENSE](LICENSE), and upstream attribution
 is recorded in [NOTICE.md](NOTICE.md).
 
 YouTube is a trademark of Google LLC, Bilibili is a trademark of its respective
-owner, and Codex is an OpenAI product. This
+owner, Codex is an OpenAI product, and TraeWork is a TRAE product. This
 community project is not affiliated with, endorsed by, or sponsored by Google,
-YouTube, Bilibili, or OpenAI.
+YouTube, Bilibili, OpenAI, or TRAE.

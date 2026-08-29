@@ -1,19 +1,27 @@
 /**
- * Shared, non-secret configuration helpers for the personal Codex-local fork.
+ * Shared, non-secret configuration helpers for local AI providers.
  *
  * The bridge address and installation capability token are generated in
  * bridge-config.js. No Supadata, DeepSeek, or OpenAI API key is used.
  */
 var YTD_SETTINGS = (() => {
   const STORAGE_KEY = "ytd_settings";
+  const PROVIDERS = Object.freeze({
+    CODEX: "codex-local",
+    TRAEWORK: "traework-local",
+  });
+  const SUPPORTED_PROVIDERS = new Set(Object.values(PROVIDERS));
   const DEFAULTS = Object.freeze({
-    provider: "codex-local",
+    provider: PROVIDERS.CODEX,
     aiBaseUrl: "http://127.0.0.1:43110",
     aiModel: "chatgpt-subscription",
   });
 
-  function normalize() {
-    return { ...DEFAULTS };
+  function normalize(value = {}) {
+    const provider = SUPPORTED_PROVIDERS.has(value?.provider)
+      ? value.provider
+      : DEFAULTS.provider;
+    return { ...DEFAULTS, provider };
   }
 
   function bridgeCompletionUrl() {
@@ -46,6 +54,8 @@ var YTD_SETTINGS = (() => {
 
   return {
     STORAGE_KEY,
+    PROVIDERS,
+    SUPPORTED_PROVIDERS,
     DEFAULTS,
     normalize,
     bridgeCompletionUrl,

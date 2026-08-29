@@ -7,7 +7,13 @@ const platforms = require("../platforms.js");
 
 const root = path.resolve(__dirname, "..");
 
-function loadHelpers({ fetchImpl = fetch, executeScript, pageGlobals } = {}) {
+function loadHelpers({
+  fetchImpl = fetch,
+  executeScript,
+  getTab,
+  queryTabs,
+  pageGlobals,
+} = {}) {
   const listeners = { addListener() {} };
   const sandbox = {
     console,
@@ -42,7 +48,14 @@ function loadHelpers({ fetchImpl = fetch, executeScript, pageGlobals } = {}) {
         openOptionsPage() {},
         getURL: (resource) => `chrome-extension://test/${resource}`,
       },
-      tabs: { onUpdated: listeners, onActivated: listeners },
+      tabs: {
+        onUpdated: listeners,
+        onActivated: listeners,
+        query: queryTabs || (async () => []),
+        get:
+          getTab ||
+          (async () => ({ url: "https://www.youtube.com/watch?v=aircAruvnKk" })),
+      },
       scripting: {
         executeScript:
           executeScript ||
@@ -65,6 +78,130 @@ test("caption selection prefers English and human-created tracks", () => {
     { baseUrl: "https://www.youtube.com/en", languageCode: "en", kind: "" },
   ]);
   assert.equal(selected.baseUrl, "https://www.youtube.com/en");
+});
+
+test("YouTube subtitle lookup stays bound to the requested video tab", async () => {
+  let fallbackQueries = 0;
+  const helpers = loadHelpers({
+    getTab: async (tabId) => ({
+      id: tabId,
+      url: "https://www.youtube.com/watch?v=aircAruvnKk",
+    }),
+    queryTabs: async () => {
+      fallbackQueries += 1;
+      return [
+        {
+          id: 99,
+          url: "https://www.youtube.com/watch?v=aircAruvnKk",
+        },
+      ];
+    },
+  });
+
+  const tab = await helpers.findYouTubeTabForVideo("aircAruvnKk", 42);
+  assert.equal(tab.id, 42);
+  assert.equal(fallbackQueries, 0);
+});
+
+test("YouTube transcript results carry the verified current video identity", async () => {
+  const playerResponse = {
+    videoDetails: {
+      videoId: "aircAruvnKk",
+      title: "Current video",
+      author: "Current channel",
+      shortDescription: "Current description",
+      lengthSeconds: "120",
+    },
+    captions: {
+      playerCaptionsTracklistRenderer: {
+        captionTracks: [
+          {
+            baseUrl: "https://www.youtube.com/api/timedtext?v=aircAruvnKk",
+            languageCode: "en",
+            kind: "",
+          },
+        ],
+      },
+    },
+  };
+  const helpers = loadHelpers({
+    getTab: async (tabId) => ({
+      id: tabId,
+      url: "https://www.youtube.com/watch?v=aircAruvnKk",
+    }),
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          events: [{ tStartMs: 0, segs: [{ utf8: "Current captions" }] }],
+        }),
+    }),
+    pageGlobals: {
+      document: {
+        getElementById: (id) =>
+          id === "movie_player"
+            ? { getPlayerResponse: () => playerResponse }
+            : null,
+      },
+    },
+  });
+
+  const result = await helpers.handleFetchYouTubeTranscript({
+    videoId: "aircAruvnKk",
+    tabId: 42,
+  });
+  assert.equal(result.success, true);
+  assert.equal(result.transcript[0].text, "Current captions");
+  assert.equal(result.videoInfo.videoId, "aircAruvnKk");
+  assert.equal(result.videoInfo.contentKey, "youtube:aircAruvnKk");
+  assert.equal(result.videoInfo.title, "Current video");
+});
+
+test("timestamp seeking uses the target tab player and starts playback", async () => {
+  let soughtTo = null;
+  let played = false;
+  const helpers = loadHelpers({
+    pageGlobals: {
+      document: {
+        getElementById: (id) =>
+          id === "movie_player"
+            ? {
+                seekTo(seconds) {
+                  soughtTo = seconds;
+                },
+                playVideo() {
+                  played = true;
+                },
+              }
+            : null,
+        querySelector: () => null,
+        querySelectorAll: () => [],
+      },
+    },
+  });
+
+  const result = await helpers.seekVideoInTab(42, 93.5);
+  assert.equal(result.success, true);
+  assert.equal(result.seconds, 93.5);
+  assert.equal(soughtTo, 93.5);
+  assert.equal(played, true);
+});
+
+test("timestamp seeking rejects unsupported tabs before page execution", async () => {
+  let executed = false;
+  const helpers = loadHelpers({
+    getTab: async () => ({ url: "https://example.com/" }),
+    executeScript: async () => {
+      executed = true;
+      return [];
+    },
+  });
+
+  const result = await helpers.seekVideoInTab(42, 10);
+  assert.equal(result.success, false);
+  assert.match(result.error, /not a supported video/i);
+  assert.equal(executed, false);
 });
 
 test("YouTube JSON3 captions become seekable transcript rows", () => {
