@@ -160,7 +160,18 @@ function sendTranslationMessage(message) {
 // --- Auto-scroll state (follow video playback in transcript) ---
 let autoScrollEnabled = true; // True = scroll transcript to follow video playback
 let autoScrollInterval = null; // setInterval ID for polling video time
-let lastAutoScrollTime = 0; // Timestamp of last programmatic scroll (ignores scroll events within 1s)
+let playbackTrackingGeneration = 0; // Invalidates replies from stopped/old trackers
+let playbackTrackingRequestInFlight = false; // Avoid overlapping async polls
+
+const PLAYBACK_FOLLOW_SCROLL_KEYS = new Set([
+  "ArrowDown",
+  "ArrowUp",
+  "End",
+  "Home",
+  "PageDown",
+  "PageUp",
+  " ",
+]);
 
 // ============================================================
 // TRANSCRIPT GROUPING
@@ -475,7 +486,7 @@ function setupEventListeners() {
       // directly (not via playbackTrackingTick) because the tick skips
       // entries that are already highlighted — and the current line almost
       // always IS highlighted, which made this button appear to do nothing.
-      if (!scrollToActiveEntry()) {
+      if (!scrollToActiveEntry({ force: true })) {
         playbackTrackingTick(); // No highlight yet — let a tick establish one
       }
     });
@@ -2208,13 +2219,26 @@ function startPlaybackTracking() {
   autoScrollEnabled = true;
   document.getElementById("followPlaybackBtn").style.display = "none";
 
-  // Poll video time every 500ms
-  autoScrollInterval = setInterval(() => playbackTrackingTick(), 500);
+  playbackTrackingGeneration += 1;
 
-  // Listen for manual scrolls on the content area
+  // Poll video time every 500ms and run once immediately so the transcript
+  // follows playback without waiting for the first interval.
+  autoScrollInterval = setInterval(() => playbackTrackingTick(), 500);
+  playbackTrackingTick();
+
+  // Listen for explicit user scrolling intent. A scroll event alone cannot
+  // distinguish a trackpad gesture from our own smooth animation, which is
+  // why the old implementation frequently disabled itself.
   const contentArea = document.getElementById("contentArea");
-  contentArea.removeEventListener("scroll", onContentAreaScroll);
-  contentArea.addEventListener("scroll", onContentAreaScroll);
+  detachPlaybackFollowIntentListeners(contentArea);
+  contentArea.addEventListener("wheel", onPlaybackFollowUserIntent, {
+    passive: true,
+  });
+  contentArea.addEventListener("touchmove", onPlaybackFollowUserIntent, {
+    passive: true,
+  });
+  contentArea.addEventListener("pointerdown", onPlaybackFollowPointerDown);
+  document.addEventListener("keydown", onPlaybackFollowKeyDown);
 }
 
 /**
@@ -2222,13 +2246,15 @@ function startPlaybackTracking() {
  * starting a new digest, or leaving results state.
  */
 function stopPlaybackTracking() {
+  playbackTrackingGeneration += 1;
   if (autoScrollInterval) {
     clearInterval(autoScrollInterval);
     autoScrollInterval = null;
   }
+  playbackTrackingRequestInFlight = false;
   autoScrollEnabled = true; // Reset for next time
-  lastAutoScrollTime = 0;
   document.getElementById("followPlaybackBtn").style.display = "none";
+  detachPlaybackFollowIntentListeners(document.getElementById("contentArea"));
 
   // Remove active highlights
   document
@@ -2243,6 +2269,11 @@ function stopPlaybackTracking() {
  * YouTube tab and highlights + scrolls to the matching transcript entry.
  */
 async function playbackTrackingTick() {
+  if (playbackTrackingRequestInFlight || !autoScrollInterval) return;
+
+  const trackingGeneration = playbackTrackingGeneration;
+  playbackTrackingRequestInFlight = true;
+
   try {
     const result = await chrome.runtime.sendMessage({
       action: "relayToContent",
@@ -2250,30 +2281,67 @@ async function playbackTrackingTick() {
       payload: { action: "getCurrentTime" },
     });
 
-    if (!result.success || !result.response) return;
+    if (
+      trackingGeneration !== playbackTrackingGeneration ||
+      !autoScrollInterval ||
+      !result?.success ||
+      !result.response
+    ) {
+      return;
+    }
 
-    const currentTime = result.response.currentTime || 0;
+    const currentTime = Number(result.response.currentTime);
+    if (!Number.isFinite(currentTime)) return;
     highlightActiveEntry(currentTime);
   } catch (error) {
     // Silently ignore — YouTube tab might be closed or navigated away
+  } finally {
+    if (trackingGeneration === playbackTrackingGeneration) {
+      playbackTrackingRequestInFlight = false;
+    }
   }
 }
 
 /**
  * Scrolls the transcript to the entry currently being spoken (the one
  * carrying the active-playback highlight). Returns false if nothing is
- * highlighted yet. Stamps lastAutoScrollTime BEFORE scrolling so the scroll
- * events from our own smooth animation aren't mistaken for the user
- * scrolling away (which would re-disable auto-scroll immediately).
+ * highlighted yet. Programmatic scrolling targets the panel's own scroll
+ * container and therefore never has to masquerade as user input.
  */
-function scrollToActiveEntry() {
+function scrollToActiveEntry({ force = false } = {}) {
   const activeEntry = document.querySelector(
     "#transcriptList .transcript-entry.active-playback",
   );
   if (!activeEntry) return false;
 
-  lastAutoScrollTime = Date.now();
-  activeEntry.scrollIntoView({ behavior: "smooth", block: "center" });
+  scrollTranscriptEntryIntoView(activeEntry, { force });
+  return true;
+}
+
+function scrollTranscriptEntryIntoView(entry, { force = false } = {}) {
+  const contentArea = document.getElementById("contentArea");
+  if (!contentArea || !entry) return false;
+
+  const containerRect = contentArea.getBoundingClientRect();
+  const entryRect = entry.getBoundingClientRect();
+  const metrics = {
+    containerTop: containerRect.top,
+    containerHeight: contentArea.clientHeight,
+    entryTop: entryRect.top,
+    entryBottom: entryRect.bottom,
+    entryHeight: entryRect.height,
+    scrollTop: contentArea.scrollTop,
+    scrollHeight: contentArea.scrollHeight,
+  };
+
+  if (!force && YTD_PLAYBACK_FOLLOW.isEntryInFollowZone(metrics)) {
+    return false;
+  }
+
+  contentArea.scrollTo({
+    top: YTD_PLAYBACK_FOLLOW.getCenteredScrollTop(metrics),
+    behavior: "smooth",
+  });
   return true;
 }
 
@@ -2290,51 +2358,71 @@ function highlightActiveEntry(currentSeconds) {
   const entries = transcriptList.querySelectorAll(".transcript-entry");
   if (entries.length === 0) return;
 
-  // Find the entry whose time range contains the current playback time
-  let activeEntry = null;
-  entries.forEach((entry, index) => {
-    const entrySeconds = parseInt(entry.dataset.seconds);
-    const nextEntry = entries[index + 1];
-    const nextSeconds = nextEntry
-      ? parseInt(nextEntry.dataset.seconds)
-      : Infinity;
-
-    if (currentSeconds >= entrySeconds && currentSeconds < nextSeconds) {
-      activeEntry = entry;
-    }
-  });
+  const entryList = Array.from(entries);
+  const activeIndex = YTD_PLAYBACK_FOLLOW.findActiveEntryIndex(
+    entryList.map((entry) => entry.dataset.seconds),
+    currentSeconds,
+  );
+  const activeEntry = activeIndex >= 0 ? entryList[activeIndex] : null;
 
   if (!activeEntry) return;
 
-  // Skip if this entry is already highlighted (no DOM thrashing)
-  if (activeEntry.classList.contains("active-playback")) return;
+  const changedEntry = !activeEntry.classList.contains("active-playback");
+  if (changedEntry) {
+    entries.forEach((entry) => entry.classList.remove("active-playback"));
+    activeEntry.classList.add("active-playback");
+  }
 
-  // Remove old highlight, add new one
-  entries.forEach((e) => e.classList.remove("active-playback"));
-  activeEntry.classList.add("active-playback");
-
-  // Only scroll if auto-scroll is enabled
+  // A newly active row is centered. For an unchanged row, still recover if a
+  // layout/font change has moved it outside the central follow zone.
   if (autoScrollEnabled) {
-    lastAutoScrollTime = Date.now();
-    activeEntry.scrollIntoView({ behavior: "smooth", block: "center" });
+    scrollTranscriptEntryIntoView(activeEntry, { force: changedEntry });
   }
 }
 
 /**
- * Scroll event handler for the content area.
- * Detects manual scrolling and disables auto-scroll so the user
- * can read at their own pace without being yanked back.
+ * Pauses following only for explicit user intent. Programmatic smooth scrolls
+ * never pass through this path, so they cannot accidentally disable tracking.
  */
-function onContentAreaScroll() {
-  // Ignore scroll events within 1 second of a programmatic scroll
-  // (smooth scroll animations can last longer than a simple boolean flag)
-  if (Date.now() - lastAutoScrollTime < 1000) return;
-
-  // User scrolled manually — disable auto-scroll and show the button
+function pausePlaybackFollow() {
   if (autoScrollEnabled && autoScrollInterval) {
     autoScrollEnabled = false;
     document.getElementById("followPlaybackBtn").style.display = "block";
   }
+}
+
+function onPlaybackFollowUserIntent() {
+  pausePlaybackFollow();
+}
+
+function onPlaybackFollowKeyDown(event) {
+  if (!PLAYBACK_FOLLOW_SCROLL_KEYS.has(event.key)) return;
+  if (
+    event.target?.matches?.(
+      "input, textarea, select, [contenteditable='true']",
+    )
+  ) {
+    return;
+  }
+  pausePlaybackFollow();
+}
+
+function onPlaybackFollowPointerDown(event) {
+  const contentArea = document.getElementById("contentArea");
+  if (!contentArea || event.target !== contentArea) return;
+
+  const bounds = contentArea.getBoundingClientRect();
+  const scrollbarHitArea = 18;
+  if (event.clientX >= bounds.right - scrollbarHitArea) {
+    pausePlaybackFollow();
+  }
+}
+
+function detachPlaybackFollowIntentListeners(contentArea) {
+  contentArea?.removeEventListener("wheel", onPlaybackFollowUserIntent);
+  contentArea?.removeEventListener("touchmove", onPlaybackFollowUserIntent);
+  contentArea?.removeEventListener("pointerdown", onPlaybackFollowPointerDown);
+  document.removeEventListener("keydown", onPlaybackFollowKeyDown);
 }
 
 // ============================================================
