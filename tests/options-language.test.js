@@ -45,13 +45,12 @@ test("every localized options-page key exists", () => {
   }
 });
 
-test("options page exposes all local AI providers with no API-key fields", () => {
+test("options page exposes Codex and TraeWork selection with no API-key fields", () => {
   const html = read("options.html");
   assert.match(html, /id="checkConnectionBtn"/);
   assert.match(html, /YouTube \+ Bilibili subtitles/);
   assert.match(html, /ChatGPT sign-in/);
   assert.match(html, /value="traework-local"/);
-  assert.match(html, /value="doubaowork-local"/);
   assert.match(html, /id="saveProviderBtn"/);
   assert.match(html, /data-language="de"/);
   assert.doesNotMatch(html, /type="password"/i);

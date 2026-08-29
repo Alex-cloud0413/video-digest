@@ -20,10 +20,6 @@ test("local AI settings allow only the supported providers and contain no API ke
     "traework-local",
   );
   assert.equal(
-    settings.normalize({ provider: "doubaowork-local" }).provider,
-    "doubaowork-local",
-  );
-  assert.equal(
     settings.bridgeCompletionUrl(),
     "http://127.0.0.1:43110/v1/complete",
   );
