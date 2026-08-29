@@ -47,6 +47,7 @@ test("bridge token comparison is exact", () => {
 test("bridge rejects provider names outside the local allowlist", () => {
   assert.equal(validateProvider(), "codex-local");
   assert.equal(validateProvider("traework-local"), "traework-local");
+  assert.equal(validateProvider("doubaowork-local"), "doubaowork-local");
   assert.throws(() => validateProvider("shell-command"), /Unsupported local AI provider/);
 });
 

@@ -6,13 +6,13 @@ Video Digest 是一个本地优先的 Chrome 扩展：把带字幕的 YouTube �
 
 本项目基于
 [zarazhangrui/youtube-digest](https://github.com/zarazhangrui/youtube-digest)
-进行二次开发。它保留原项目的学习体验，并使用视频平台页面字幕与本机 Codex CLI 或 Trae CLI 2.0，替代需要单独付费的字幕和大模型 API。
+进行二次开发。它保留原项目的学习体验，并使用视频平台页面字幕与本机 Codex CLI、Trae CLI 2.0 或已登录的豆包工作桌面端，替代需要单独付费的字幕和大模型 API。
 
 ## 主要功能
 
 - 读取当前 YouTube 或哔哩哔哩播放器公开的字幕轨道。
 - 查看原文、简体中文或中英双语对照字幕。
-- 使用 Codex 或 TraeWork 生成章节、重点引用、解释、翻译与润色笔记。
+- 使用 Codex、TraeWork 或豆包工作生成章节、重点引用、解释、翻译与润色笔记。
 - 针对任意字幕片段、Overview 内容或已有 Note 直接提问，并可把任一服务的回答保存回 Notes。
 - 保存时间戳笔记，并跳回视频对应位置。
 - 在 Create 页面组合视频来源、概览、笔记与个人反思。
@@ -30,6 +30,7 @@ Video Digest 是一个本地优先的 Chrome 扩展：把带字幕的 YouTube �
 
 - **Codex**：调用已登录的 Codex CLI，并把结果直接返回 Video Digest。
 - **TraeWork**：以非交互模式调用 Trae CLI 2.0，并把最终回答直接返回 Video Digest。
+- **豆包工作**：通过 macOS Apple Events 驱动一个专用的最小化会话窗口，并把最终回答直接返回 Video Digest。
 
 本机连接程序会：
 
@@ -45,7 +46,7 @@ Video Digest 是一个本地优先的 Chrome 扩展：把带字幕的 YouTube �
 
 - Google Chrome 116 或更高版本
 - Node.js 18 或更高版本
-- 至少一个已登录的本地 AI 服务：[Codex CLI](https://developers.openai.com/codex/cli) 或 [Trae CLI 2.0](https://docs.trae.cn/cli_get-started-with-trae-code-cli-2)
+- 至少一个已登录的本地 AI 服务：[Codex CLI](https://developers.openai.com/codex/cli)、[Trae CLI 2.0](https://docs.trae.cn/cli_get-started-with-trae-code-cli-2) 或 macOS 豆包工作桌面端
 - 一个提供字幕的 YouTube 或哔哩哔哩视频
 
 ## 安装
@@ -59,6 +60,19 @@ node bridge/server.js
 
 选择 TraeWork 前，请先在终端运行 `traecli login` 登录。如果 CLI 2.0
 与旧版兼容命令并存，请改用 `traex login`。
+
+选择豆包工作前，请先登录豆包工作，并在应用中开启
+**显示（View）→ 开发者（Developer）→ 允许来自 Apple Events 的 JavaScript**。
+本机连接程序会创建并复用一个专用的最小化豆包会话窗口；不会读取或保存豆包登录凭据。macOS 首次使用时可能会询问是否允许运行连接程序的进程控制豆包工作。
+
+如果豆包工作 2.27.x 没有显示“开发者”菜单，请退出豆包工作后运行：
+
+```bash
+plutil -replace browser.allow_javascript_apple_events -bool true \
+  "$HOME/Library/Application Support/DoubaoWork/Default/Preferences"
+```
+
+重新打开豆包工作后，再在 Video Digest 中检查连接。
 
 保持最后一个命令运行，然后：
 
@@ -115,7 +129,7 @@ Learning Pack 可以包含：
 2. 阅读或翻译字幕。
 3. 打开 **Overview** 查看章节与重点引用。
 4. 选中字幕获取解释。
-5. 在字幕片段、章节、重点引用或 Note 上点击 **Ask**。Codex 与 TraeWork 都会在插件内回答。
+5. 在字幕片段、章节、重点引用或 Note 上点击 **Ask**。Codex、TraeWork 与豆包工作都会在插件内回答。
 6. 将有价值的回答保存到 **Notes**，同时保留来源和时间戳。
 7. 从播放器或重点引用保存时间戳笔记。
 8. 打开 **Create**，补充个人反思，再发送 Learning Pack。
