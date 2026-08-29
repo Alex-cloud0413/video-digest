@@ -521,6 +521,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === "getPlaybackState") {
+    getVideoPlaybackStateInTab(message.tabId)
+      .then(sendResponse)
+      .catch((error) =>
+        sendResponse({
+          success: false,
+          error: error?.message || "Video playback state is unavailable",
+        }),
+      );
+    return true;
+  }
+
   // Relay messages from side panel to content script
   if (message.action === "relayToContent") {
     debugLog("[YouTube Digest BG] Relay request:", message.payload?.action);
@@ -675,6 +687,57 @@ async function seekVideoInTab(tabId, seconds) {
   return results?.[0]?.result || {
     success: false,
     error: "The video page returned no seek result",
+  };
+}
+
+/**
+ * Reads playback state directly from the page instead of depending on a
+ * content-script receiver. Existing video tabs do not automatically receive a
+ * newly reloaded extension's content script, so direct page execution keeps
+ * transcript following alive across extension reloads and tab restoration.
+ */
+async function getVideoPlaybackStateInTab(tabId) {
+  if (!Number.isInteger(tabId)) {
+    return { success: false, error: "Invalid video tab" };
+  }
+
+  const tab = await chrome.tabs.get(tabId);
+  if (!YTD_PLATFORMS.isSupportedVideoUrl(tab?.url || "")) {
+    return { success: false, error: "The target tab is not a supported video" };
+  }
+
+  const results = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    func: () => {
+      const videos = [...document.querySelectorAll("video")];
+      const video =
+        document.querySelector("video.html5-main-video") ||
+        videos.find((candidate) => candidate.readyState > 0) ||
+        videos[0];
+      if (!video) {
+        return { success: false, error: "No video player found" };
+      }
+
+      const currentTime = Number(video.currentTime);
+      if (!Number.isFinite(currentTime)) {
+        return { success: false, error: "Video time is unavailable" };
+      }
+
+      return {
+        success: true,
+        currentTime,
+        paused: Boolean(video.paused),
+        duration: Number.isFinite(Number(video.duration))
+          ? Number(video.duration)
+          : 0,
+      };
+    },
+  });
+
+  return results?.[0]?.result || {
+    success: false,
+    error: "The video page returned no playback state",
   };
 }
 
@@ -2491,6 +2554,7 @@ globalThis.__YTD_DIRECT_TRANSCRIPT_TESTING__ = {
   parseYouTubeCaptionPayload,
   parseYouTubeJson3,
   parseYouTubeXml,
+  getVideoPlaybackStateInTab,
   seekVideoInTab,
   selectCaptionTrack,
 };

@@ -204,6 +204,47 @@ test("timestamp seeking rejects unsupported tabs before page execution", async (
   assert.equal(executed, false);
 });
 
+test("playback state is read directly without a content-script receiver", async () => {
+  const helpers = loadHelpers({
+    getTab: async (tabId) => ({
+      id: tabId,
+      url: "https://www.bilibili.com/video/BV1qQBjBKEj2",
+    }),
+    pageGlobals: {
+      document: {
+        querySelector: () => ({
+          currentTime: 48.25,
+          duration: 314,
+          paused: false,
+          readyState: 4,
+        }),
+        querySelectorAll: () => [],
+      },
+    },
+  });
+
+  const result = await helpers.getVideoPlaybackStateInTab(42);
+  assert.equal(result.success, true);
+  assert.equal(result.currentTime, 48.25);
+  assert.equal(result.duration, 314);
+  assert.equal(result.paused, false);
+});
+
+test("playback state rejects unsupported tabs before page execution", async () => {
+  let executed = false;
+  const helpers = loadHelpers({
+    getTab: async () => ({ id: 42, url: "https://example.com/video" }),
+    executeScript: async () => {
+      executed = true;
+      return [];
+    },
+  });
+
+  const result = await helpers.getVideoPlaybackStateInTab(42);
+  assert.equal(result.success, false);
+  assert.equal(executed, false);
+});
+
 test("YouTube JSON3 captions become seekable transcript rows", () => {
   const helpers = loadHelpers();
   const transcript = helpers.parseYouTubeCaptionPayload(

@@ -1118,6 +1118,10 @@ function showState(state) {
 
   if (state !== "results") {
     stopPlaybackTracking();
+  } else if (
+    document.querySelector(".tab.active")?.dataset.tab === "transcript"
+  ) {
+    startPlaybackTracking();
   }
 }
 
@@ -2276,22 +2280,20 @@ async function playbackTrackingTick() {
 
   try {
     const result = await chrome.runtime.sendMessage({
-      action: "relayToContent",
+      action: "getPlaybackState",
       tabId: videoTabId,
-      payload: { action: "getCurrentTime" },
     });
 
     if (
       trackingGeneration !== playbackTrackingGeneration ||
       !autoScrollInterval ||
       !result?.success ||
-      !result.response
+      !Number.isFinite(Number(result.currentTime))
     ) {
       return;
     }
 
-    const currentTime = Number(result.response.currentTime);
-    if (!Number.isFinite(currentTime)) return;
+    const currentTime = Number(result.currentTime);
     highlightActiveEntry(currentTime);
   } catch (error) {
     // Silently ignore — YouTube tab might be closed or navigated away

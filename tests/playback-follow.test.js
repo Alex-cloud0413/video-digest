@@ -13,6 +13,10 @@ const sidepanelHtml = fs.readFileSync(
   path.join(root, "sidepanel.html"),
   "utf8",
 );
+const backgroundSource = fs.readFileSync(
+  path.join(root, "background.js"),
+  "utf8",
+);
 
 test("active transcript lookup follows ordered playback boundaries", () => {
   const starts = [0, 12.5, 28, 60];
@@ -99,8 +103,17 @@ test("side panel distinguishes user scroll intent from its own smooth scroll", (
   );
   assert.match(sidepanelSource, /playbackTrackingTick\(\);/);
   assert.match(sidepanelSource, /playbackTrackingRequestInFlight/);
+  assert.match(sidepanelSource, /action: "getPlaybackState"/);
+  assert.match(
+    sidepanelSource,
+    /state !== "results"[\s\S]*?\.tab\.active[\s\S]*?startPlaybackTracking\(\)/,
+  );
   assert.match(sidepanelSource, /contentArea\.scrollTo\(\{/);
   assert.match(sidepanelSource, /addEventListener\("wheel", onPlaybackFollowUserIntent/);
   assert.match(sidepanelSource, /addEventListener\("touchmove", onPlaybackFollowUserIntent/);
   assert.doesNotMatch(sidepanelSource, /addEventListener\("scroll", onContentAreaScroll/);
+  assert.match(
+    backgroundSource,
+    /async function getVideoPlaybackStateInTab\(tabId\)[\s\S]*?chrome\.scripting\.executeScript\(\{[\s\S]*?world: "MAIN"/,
+  );
 });
