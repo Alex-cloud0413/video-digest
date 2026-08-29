@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Video Digest",
-  "version": "1.6.1",
+  "version": "1.7.0",
   "minimum_chrome_version": "116",
-  "description": "Study YouTube and Bilibili with direct subtitles, local Codex features, and reusable Learning Packs.",
+  "description": "Study YouTube and Bilibili with direct subtitles, local Codex or TraeWork features, and reusable Learning Packs.",
   "permissions": ["sidePanel", "storage", "tabs", "scripting"],
   "host_permissions": [
     "https://www.youtube.com/*",

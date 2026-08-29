@@ -28,7 +28,7 @@
             </button>
           </div>
         </div>
-        <h1 data-i18n="heading">Connected to your local Codex</h1>
+        <h1 data-i18n="heading">Choose your local AI</h1>
         <p class="lede" data-i18n="lede">
           This local-first edition needs no Supadata, DeepSeek, or OpenAI API key.
         </p>
@@ -47,17 +47,25 @@
 
       <section class="card">
         <h2 data-i18n="aiHeading">AI provider</h2>
+        <label for="providerSelect" data-i18n="providerLabel">Use Video Digest with</label>
+        <select id="providerSelect">
+          <option value="codex-local" data-i18n="codexOption">Codex (inline results)</option>
+          <option value="traework-local" data-i18n="traeWorkOption">TraeWork (inline results)</option>
+        </select>
         <div class="provider-summary" aria-label="AI provider">
-          <span class="provider-name" data-i18n="aiProvider">Codex through your ChatGPT sign-in</span>
-          <span class="provider-badge" data-i18n="subscriptionBadge">Subscription access</span>
+          <span id="providerName" class="provider-name">Codex through your ChatGPT sign-in</span>
+          <span id="providerBadge" class="provider-badge">Inline results</span>
         </div>
-        <p class="help" data-i18n="aiHelp">
+        <p id="providerHelp" class="help">
           A loopback-only helper sends requested transcript text to the Codex CLI signed in on this computer.
         </p>
-        <div class="privacy-note" data-i18n="privacyNote">
+        <div id="privacyNote" class="privacy-note">
           Requests use your Codex subscription limits. The helper accepts authenticated calls only from local Chrome extensions.
         </div>
         <div class="form-actions">
+          <button id="saveProviderBtn" class="primary" type="button" data-i18n="saveProvider">
+            Save provider
+          </button>
           <button id="checkConnectionBtn" class="primary" type="button" data-i18n="checkConnection">
             Check local connection
           </button>
@@ -79,10 +87,11 @@
       </section>
 
       <footer data-i18n-html="footer">
-        Video Digest is an open-source local edition based on YouTube Digest and powered by Codex.
+        Video Digest is an open-source local edition based on YouTube Digest.
       </footer>
     </main>
 
+    <script src="settings.js"></script>
     <script src="options.js"></script>
   </body>
 </html>

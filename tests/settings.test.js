@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 
 const settings = require("../settings.js");
 
-test("local Codex settings are fixed and contain no provider key", () => {
+test("local AI settings allow only the supported providers and contain no API key", () => {
   const normalized = settings.normalize({
     provider: "unexpected",
     aiApiKey: "must-not-survive",
@@ -15,6 +15,10 @@ test("local Codex settings are fixed and contain no provider key", () => {
     aiModel: "chatgpt-subscription",
   });
   assert.equal(Object.hasOwn(normalized, "aiApiKey"), false);
+  assert.equal(
+    settings.normalize({ provider: "traework-local" }).provider,
+    "traework-local",
+  );
   assert.equal(
     settings.bridgeCompletionUrl(),
     "http://127.0.0.1:43110/v1/complete",

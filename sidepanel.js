@@ -35,7 +35,7 @@ let errorLocalization = null;
 let learningDraftSaveTimer = null;
 let tabCheckGeneration = 0;
 let digestGeneration = 0;
-const DIGEST_CACHE_SCHEMA_VERSION = 2;
+const DIGEST_CACHE_SCHEMA_VERSION = 3;
 let currentInterfaceLanguage = "en";
 
 function t(key, variables = {}) {
@@ -603,6 +603,7 @@ function extractVideoId(url) {
 function transcriptFailureLocalization(result = {}) {
   const keyByCode = {
     VIDEO_TAB_NOT_FOUND: "videoTabNotFound",
+    SOURCE_MISMATCH: "sourceMismatchMessage",
     BILIBILI_LOGIN_REQUIRED: "bilibiliLoginRequired",
     NO_TRANSCRIPT: "noTranscriptAvailable",
     BILIBILI_METADATA_FAILED: "bilibiliMetadataFailed",
@@ -734,7 +735,6 @@ async function startDigest(videoId, videoUrl, source = null) {
   }
 
   if (
-    currentPlatform === "bilibili" &&
     transcriptResult?.success &&
     transcriptResult.videoInfo?.contentKey !== nextContentKey
   ) {
@@ -1413,38 +1413,22 @@ async function triggerAnalysis() {
 
 async function seekTo(seconds) {
   debugLog("[YouTube Digest Panel] seekTo called with:", seconds);
-  if (seconds === undefined || seconds === null) {
+  const targetSeconds = Number(seconds);
+  if (!Number.isFinite(targetSeconds)) {
     debugLog("[YouTube Digest Panel] seekTo aborted - no seconds value");
     return;
   }
 
-  const payload = {
-    action: "seekTo",
-    seconds: Number(seconds),
-  };
-
   try {
-    // Try direct messaging to the stored YouTube tab first (fastest/reliable)
-    if (videoTabId) {
-      try {
-        await chrome.tabs.sendMessage(videoTabId, payload);
-        debugLog("[YouTube Digest Panel] seekTo direct success");
-        return;
-      } catch (directErr) {
-        debugLog(
-          "[YouTube Digest Panel] Direct seekTo failed, falling back to relay:",
-          directErr.message,
-        );
-      }
-    }
-
-    // Fallback: route through background script
     const result = await chrome.runtime.sendMessage({
-      action: "relayToContent",
+      action: "seekVideo",
       tabId: videoTabId,
-      payload,
+      seconds: Math.max(0, targetSeconds),
     });
-    debugLog("[YouTube Digest Panel] seekTo relay result:", result);
+    if (!result?.success) {
+      throw new Error(result?.error || "The video could not seek to this timestamp");
+    }
+    debugLog("[YouTube Digest Panel] seekTo result:", result);
   } catch (error) {
     console.error("[YouTube Digest Panel] seekTo error:", error);
   }
@@ -1927,6 +1911,7 @@ async function saveToCache(videoId) {
       transcriptLanguage: currentTranscriptLanguage,
       videoTitle: currentVideoTitle,
       channelName: currentChannelName,
+      videoId,
       platform: currentPlatform,
       pageNumber: currentPageNumber,
       paragraphCache: paragraphCacheForVideo,
@@ -2019,12 +2004,13 @@ async function loadFromCache(videoId) {
         ? `youtube:${videoId}`
         : `bilibili:${videoId}:p${currentPageNumber}`;
     if (
-      currentPlatform === "bilibili" &&
-      (cached.cacheSchemaVersion !== DIGEST_CACHE_SCHEMA_VERSION ||
-        cached.contentKey !== expectedContentKey)
+      cached.cacheSchemaVersion !== DIGEST_CACHE_SCHEMA_VERSION ||
+      cached.contentKey !== expectedContentKey ||
+      cached.videoId !== videoId
     ) {
-      // Invalidate only derived digest data from builds that could bind a
-      // stale Bilibili player global. Timestamped Notes use separate keys.
+      // Invalidate derived digest data from builds that did not bind every
+      // transcript and cache entry to an exact platform/video identity.
+      // Timestamped Notes use separate keys and are not affected.
       await chrome.storage.local.remove(cacheKeys);
       return null;
     }

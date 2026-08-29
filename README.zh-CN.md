@@ -2,18 +2,18 @@
 
 [English](README.md)
 
-Video Digest 是一个本地优先的 Chrome 扩展：把带字幕的 YouTube 或哔哩哔哩视频变成可搜索字幕、双语学习视图、Codex 生成的概览与解释、时间戳笔记，以及可继续进入个人创作流程的 Learning Pack。
+Video Digest 是一个本地优先的 Chrome 扩展：把带字幕的 YouTube 或哔哩哔哩视频变成可搜索字幕、双语学习视图、AI 辅助概览与解释、时间戳笔记，以及可继续进入个人创作流程的 Learning Pack。
 
 本项目基于
 [zarazhangrui/youtube-digest](https://github.com/zarazhangrui/youtube-digest)
-进行二次开发。它保留原项目的学习体验，并使用视频平台页面字幕与本机 Codex CLI，替代需要单独付费的字幕和大模型 API。
+进行二次开发。它保留原项目的学习体验，并使用视频平台页面字幕与本机 Codex CLI 或 Trae CLI 2.0，替代需要单独付费的字幕和大模型 API。
 
 ## 主要功能
 
 - 读取当前 YouTube 或哔哩哔哩播放器公开的字幕轨道。
 - 查看原文、简体中文或中英双语对照字幕。
-- 使用 Codex 生成章节、重点引用、解释、翻译与润色笔记。
-- 针对任意字幕片段、Overview 内容或已有 Note 直接提问，并把 Codex 回答保存回 Notes。
+- 使用 Codex 或 TraeWork 生成章节、重点引用、解释、翻译与润色笔记。
+- 针对任意字幕片段、Overview 内容或已有 Note 直接提问，并可把任一服务的回答保存回 Notes。
 - 保存时间戳笔记，并跳回视频对应位置。
 - 在 Create 页面组合视频来源、概览、笔记与个人反思。
 - 把严格限定内容的 Learning Pack 发送到可配置的本地 Creator Workspace。
@@ -26,23 +26,26 @@ Video Digest 是一个本地优先的 Chrome 扩展：把带字幕的 YouTube �
 ## 工作原理
 
 扩展直接读取当前视频页面字幕。需要 AI 的操作会发送给只监听
-`127.0.0.1:43110` 的本机连接程序；连接程序调用已经通过 ChatGPT 登录的 Codex CLI。
+`127.0.0.1:43110` 的本机连接程序。用户可在设置中选择：
+
+- **Codex**：调用已登录的 Codex CLI，并把结果直接返回 Video Digest。
+- **TraeWork**：以非交互模式调用 Trae CLI 2.0，并把最终回答直接返回 Video Digest。
 
 本机连接程序会：
 
 - 只监听本机回环地址；
 - 每次请求都校验随机生成的安装凭据；
 - 只接受本机 Chrome 扩展来源；
-- 使用临时 Codex 会话、只读沙箱并禁用工具；
+- 在专用运行目录和只读沙箱中临时运行所选 CLI，并忽略用户配置与规则；
 - 串行处理请求，并限制输入、输出与运行时间。
 
-Codex 请求会计入当前 ChatGPT 套餐的使用额度。
+请求会计入所选服务中已登录账号的使用额度。
 
 ## 环境要求
 
 - Google Chrome 116 或更高版本
 - Node.js 18 或更高版本
-- 已安装并登录的 [Codex CLI](https://developers.openai.com/codex/cli)
+- 至少一个已登录的本地 AI 服务：[Codex CLI](https://developers.openai.com/codex/cli) 或 [Trae CLI 2.0](https://docs.trae.cn/cli_get-started-with-trae-code-cli-2)
 - 一个提供字幕的 YouTube 或哔哩哔哩视频
 
 ## 安装
@@ -53,6 +56,9 @@ cd video-digest
 node bridge/generate-config.js
 node bridge/server.js
 ```
+
+选择 TraeWork 前，请先在终端运行 `traecli login` 登录。如果 CLI 2.0
+与旧版兼容命令并存，请改用 `traex login`。
 
 保持最后一个命令运行，然后：
 
@@ -109,7 +115,7 @@ Learning Pack 可以包含：
 2. 阅读或翻译字幕。
 3. 打开 **Overview** 查看章节与重点引用。
 4. 选中字幕获取解释。
-5. 在字幕片段、章节、重点引用或 Note 上点击 **Ask**，直接在侧边栏向 Codex 提问。
+5. 在字幕片段、章节、重点引用或 Note 上点击 **Ask**。Codex 与 TraeWork 都会在插件内回答。
 6. 将有价值的回答保存到 **Notes**，同时保留来源和时间戳。
 7. 从播放器或重点引用保存时间戳笔记。
 8. 打开 **Create**，补充个人反思，再发送 Learning Pack。
@@ -140,5 +146,5 @@ npm run check
 原项目和本项目均使用 MIT License。原始版权声明保留在
 [LICENSE](LICENSE)，上游来源记录在 [NOTICE.md](NOTICE.md)。
 
-YouTube 是 Google LLC 的商标，哔哩哔哩商标归其权利人所有，Codex 是 OpenAI 的产品。本社区项目与
-Google、YouTube、哔哩哔哩或 OpenAI 没有隶属、背书或赞助关系。
+YouTube 是 Google LLC 的商标，哔哩哔哩商标归其权利人所有，Codex 是 OpenAI 的产品，TraeWork 是 TRAE 的产品。本社区项目与
+Google、YouTube、哔哩哔哩、OpenAI 或 TRAE 没有隶属、背书或赞助关系。

@@ -1,8 +1,8 @@
 {
   "name": "video-digest",
-  "version": "1.6.1",
+  "version": "1.7.0",
   "private": true,
-  "description": "YouTube and Bilibili learning extension with direct subtitles, local Codex features, and Creator Workspace handoff.",
+  "description": "YouTube and Bilibili learning extension with direct subtitles, local Codex or TraeWork features, and Creator Workspace handoff.",
   "license": "MIT",
   "scripts": {
     "test": "node --test tests/*.test.js bridge/*.test.js",

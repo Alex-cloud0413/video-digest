@@ -13,7 +13,7 @@ test("manifest grants only supported video and loopback bridge hosts", () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.minimum_chrome_version, "116");
   assert.equal(manifest.name, "Video Digest");
-  assert.equal(manifest.version, "1.6.1");
+  assert.equal(manifest.version, "1.7.0");
   assert.equal(manifest.action.default_title, "Open Video Digest");
   assert.equal(packageJson.version, manifest.version);
   assert.deepEqual(manifest.host_permissions.sort(), [
@@ -58,6 +58,7 @@ test("published documentation describes the generic local setup", () => {
   ].join("\n");
 
   assert.match(docs, /Codex/i);
+  assert.match(docs, /TraeWork/i);
   assert.match(docs, /Video Digest/);
   assert.match(docs, /YouTube or Bilibili|YouTube 或哔哩哔哩/i);
   assert.match(docs, /no .*API key|不需要.*API Key|无需 API Key/i);
@@ -77,15 +78,28 @@ test("notes filters preserve selected state", () => {
   assert.match(js, /setAttribute\("aria-pressed", String\(showAll\)\)/);
 });
 
-test("Bilibili digest results are source-bound and stale requests are ignored", () => {
+test("digest results are source-bound and stale requests are ignored", () => {
   const background = read("background.js");
   const sidepanel = read("sidepanel.js");
 
   assert.match(background, /Never trust __playinfo__/);
   assert.match(background, /contentKey: `bilibili:\$\{safeVideoId\}:p\$\{safePageNumber\}`/);
+  assert.match(background, /contentKey: `youtube:\$\{videoId\}`/);
+  assert.match(background, /findYouTubeTabForVideo\(videoId, source\?\.tabId\)/);
+  assert.match(background, /finalDetails\?\.videoId !== videoId/);
   assert.match(sidepanel, /requestGeneration !== digestGeneration/);
   assert.match(sidepanel, /t\("sourceMismatchTitle"\)/);
   assert.match(sidepanel, /cacheSchemaVersion !== DIGEST_CACHE_SCHEMA_VERSION/);
+  assert.match(sidepanel, /cached\.contentKey !== expectedContentKey/);
+  assert.match(sidepanel, /cached\.videoId !== videoId/);
+  assert.match(
+    sidepanel,
+    /const cacheData = \{[\s\S]*?channelName: currentChannelName,\s+videoId,\s+platform: currentPlatform/,
+  );
+  assert.doesNotMatch(
+    sidepanel,
+    /function renderAnalysisResults\([\s\S]*?channelName: currentChannelName,\s+videoId,\s+timestampSeconds: chapter\.timestampSeconds/,
+  );
 });
 
 test("Create tab exposes the bounded Creator Workspace handoff and browser theme", () => {

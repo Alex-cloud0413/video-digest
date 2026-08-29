@@ -205,11 +205,18 @@
     }
     if (message.action === "seekTo") {
       const video = videoElement();
-      if (video) {
-        video.currentTime = Math.max(0, Number(message.seconds) || 0);
+      const seconds = Number(message.seconds);
+      if (video && Number.isFinite(seconds)) {
+        const duration = Number(video.duration);
+        video.currentTime = Number.isFinite(duration) && duration > 0
+          ? Math.min(Math.max(0, seconds), duration)
+          : Math.max(0, seconds);
         if (video.paused) video.play().catch(() => {});
       }
-      sendResponse({ success: Boolean(video) });
+      sendResponse({
+        success: Boolean(video) && Number.isFinite(seconds),
+        error: video ? undefined : "No video player found",
+      });
       return false;
     }
     if (message.action === "getCurrentTime") {

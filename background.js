@@ -4,7 +4,7 @@
  * This is the "brain" of the extension. It runs in the background and handles:
  * 1. Opening the side panel when the user clicks the extension icon
  * 2. Reading native YouTube subtitle tracks directly from the active player
- * 3. Calling the loopback-only Codex bridge for language features
+ * 3. Calling the selected local AI provider through the loopback-only bridge
  * 4. Sending results back to the side panel
  *
  * Think of it like a backend server — it does the heavy lifting
@@ -40,7 +40,10 @@ chrome.storage.local
   );
 
 async function getSettings() {
-  return YTD_SETTINGS.normalize();
+  const stored = await chrome.storage.local
+    .get(YTD_SETTINGS.STORAGE_KEY)
+    .catch(() => ({}));
+  return YTD_SETTINGS.normalize(stored[YTD_SETTINGS.STORAGE_KEY]);
 }
 
 const promptFileCache = new Map();
@@ -88,11 +91,12 @@ async function requestAiCompletion({
   const settings = await getSettings();
   const bridge = globalThis.YTD_LOCAL_BRIDGE;
   if (!bridge?.baseUrl || !bridge?.token) {
-    const error = new Error("Local Codex bridge configuration is missing.");
+    const error = new Error("Local AI bridge configuration is missing.");
     error.code = "BRIDGE_CONFIG_MISSING";
     throw error;
   }
   const body = {
+    provider: settings.provider,
     messages,
     maxTokens,
     responseFormat,
@@ -116,7 +120,7 @@ async function requestAiCompletion({
     });
     const responseText = await response.text();
     if (new TextEncoder().encode(responseText).byteLength > AI_PROVIDER_MAX_RESPONSE_BYTES) {
-      const error = new Error("Local Codex response exceeded the 2 MiB limit.");
+      const error = new Error("Local AI response exceeded the 2 MiB limit.");
       error.code = "AI_RESPONSE_TOO_LARGE";
       throw error;
     }
@@ -124,16 +128,16 @@ async function requestAiCompletion({
     try {
       data = JSON.parse(responseText);
     } catch {
-      throw new Error("Local Codex bridge returned an invalid response.");
+      throw new Error("Local AI bridge returned an invalid response.");
     }
     if (!response.ok) {
-      const error = new Error(data.error || `Local Codex error: ${response.status}`);
+      const error = new Error(data.error || `Local AI error: ${response.status}`);
       error.status = response.status;
       throw error;
     }
     const text = data.text;
     if (typeof text !== "string" || !text.trim()) {
-      const error = new Error("Local Codex returned an empty response.");
+      const error = new Error("The selected local AI provider returned an empty response.");
       error.code = "EMPTY_AI_RESPONSE";
       throw error;
     }
@@ -141,7 +145,7 @@ async function requestAiCompletion({
   } catch (error) {
     if (error?.name === "AbortError") {
       const timeoutError = new Error(
-        "Local Codex request exceeded the 185-second limit. Please Retry.",
+        "Local AI request exceeded the 185-second limit. Please Retry.",
       );
       timeoutError.code = "AI_HARD_TIMEOUT";
       throw timeoutError;
@@ -152,9 +156,20 @@ async function requestAiCompletion({
   }
 }
 
+function localAiFailure(error, fallbackMessage) {
+  return {
+    success: false,
+    error: error?.message || fallbackMessage,
+    code: error?.code,
+  };
+}
+
 async function checkLocalBridge() {
   const bridge = globalThis.YTD_LOCAL_BRIDGE;
-  if (!bridge?.baseUrl) return false;
+  const settings = await getSettings();
+  if (!bridge?.baseUrl) {
+    return { online: false, provider: settings.provider, providers: {} };
+  }
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 3_000);
   try {
@@ -162,11 +177,19 @@ async function checkLocalBridge() {
       cache: "no-store",
       signal: controller.signal,
     });
-    if (!response.ok) return false;
+    if (!response.ok) {
+      return { online: false, provider: settings.provider, providers: {} };
+    }
     const data = await response.json();
-    return data?.ok === true && data?.provider === "codex-local";
+    const providers = data?.providers || {};
+    return {
+      online: data?.ok === true && providers[settings.provider]?.available === true,
+      provider: settings.provider,
+      providers,
+      bridgeOnline: data?.ok === true,
+    };
   } catch {
-    return false;
+    return { online: false, provider: settings.provider, providers: {} };
   } finally {
     clearTimeout(timeoutId);
   }
@@ -175,7 +198,7 @@ async function checkLocalBridge() {
 async function sendLearningPackToCreatorWorkspace(pack) {
   const bridge = globalThis.YTD_LOCAL_BRIDGE;
   if (!bridge?.baseUrl || !bridge?.token) {
-    return { success: false, error: "Local Codex bridge configuration is missing." };
+    return { success: false, error: "Local AI bridge configuration is missing." };
   }
 
   const controller = new AbortController();
@@ -416,13 +439,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.action === "checkConfig") {
     checkLocalBridge()
-      .then((bridgeOnline) =>
+      .then((status) =>
         sendResponse({
           transcriptReady: true,
-          aiReady: bridgeOnline,
-          bridgeOnline,
+          aiReady: status.online,
+          bridgeOnline: status.bridgeOnline === true,
+          provider: status.provider,
+          providers: status.providers,
           hasSupadataKey: true,
-          hasAiKey: bridgeOnline,
+          hasAiKey: status.online,
         }),
       )
       .catch((error) => sendResponse({ error: error.message }));
@@ -485,6 +510,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     sendResponse({ success: true });
     return false;
+  }
+
+  if (message.action === "seekVideo") {
+    seekVideoInTab(message.tabId, message.seconds)
+      .then(sendResponse)
+      .catch((error) =>
+        sendResponse({ success: false, error: error?.message || "Video seek failed" }),
+      );
+    return true;
   }
 
   // Relay messages from side panel to content script
@@ -580,6 +614,71 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 /**
+ * Seeks the supported video tab without depending on a content-script message
+ * receiver. This keeps timestamps working immediately after an extension
+ * reload, when already-open video pages have not reloaded their content script.
+ */
+async function seekVideoInTab(tabId, seconds) {
+  const targetSeconds = Number(seconds);
+  if (!Number.isInteger(tabId) || !Number.isFinite(targetSeconds)) {
+    return { success: false, error: "Invalid video tab or timestamp" };
+  }
+
+  const tab = await chrome.tabs.get(tabId);
+  if (!YTD_PLATFORMS.isSupportedVideoUrl(tab?.url || "")) {
+    return { success: false, error: "The target tab is not a supported video" };
+  }
+
+  const target = Math.max(0, targetSeconds);
+  const results = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    args: [target],
+    func: async (requestedSeconds) => {
+      const finiteTarget = Number(requestedSeconds);
+      if (!Number.isFinite(finiteTarget)) {
+        return { success: false, error: "Invalid timestamp" };
+      }
+
+      const player = document.getElementById("movie_player");
+      if (typeof player?.seekTo === "function") {
+        player.seekTo(Math.max(0, finiteTarget), true);
+        player.playVideo?.();
+        return { success: true, seconds: Math.max(0, finiteTarget) };
+      }
+
+      const videos = [...document.querySelectorAll("video")];
+      const video =
+        document.querySelector("video.html5-main-video") ||
+        videos.find((candidate) => candidate.readyState > 0) ||
+        videos[0];
+      if (!video) return { success: false, error: "No video player found" };
+
+      const duration = Number(video.duration);
+      const boundedTarget = Number.isFinite(duration) && duration > 0
+        ? Math.min(Math.max(0, finiteTarget), duration)
+        : Math.max(0, finiteTarget);
+      video.currentTime = boundedTarget;
+      try {
+        await video.play();
+      } catch {
+        // The seek still succeeds if browser autoplay policy blocks playback.
+      }
+      return {
+        success: true,
+        seconds: boundedTarget,
+        playing: !video.paused,
+      };
+    },
+  });
+
+  return results?.[0]?.result || {
+    success: false,
+    error: "The video page returned no seek result",
+  };
+}
+
+/**
  * Reads the current video's full details straight from YouTube's player.
  *
  * Content scripts live in an isolated world and can't touch the page's own
@@ -601,6 +700,7 @@ async function getPlayerVideoDetails(tabId) {
           const details = player?.getPlayerResponse?.()?.videoDetails;
           if (!details) return null;
           return {
+            videoId: details.videoId || "",
             title: details.title || "",
             channelName: details.author || "",
             description: details.shortDescription || "",
@@ -622,23 +722,38 @@ async function getPlayerVideoDetails(tabId) {
 // DIRECT YOUTUBE SUBTITLE EXTRACTION
 // ============================================================
 
-async function findYouTubeTabForVideo(videoId) {
+async function findYouTubeTabForVideo(videoId, requestedTabId) {
   const expected = String(videoId || "");
+  const matches = (tab) => {
+    try {
+      const url = new URL(tab?.url || "");
+      return (
+        url.hostname === "www.youtube.com" &&
+        url.pathname === "/watch" &&
+        url.searchParams.get("v") === expected
+      );
+    } catch {
+      return false;
+    }
+  };
+
+  // The side panel already knows which tab it belongs to. Prefer that exact
+  // tab so another YouTube window cannot supply captions for this request.
+  if (Number.isInteger(requestedTabId)) {
+    try {
+      const requested = await chrome.tabs.get(requestedTabId);
+      if (matches(requested)) return requested;
+    } catch {}
+  }
+
   const candidates = [];
   const addMatches = (tabs) => {
     for (const tab of tabs || []) {
-      try {
-        const url = new URL(tab.url || "");
-        if (
-          url.hostname === "www.youtube.com" &&
-          url.pathname === "/watch" &&
-          url.searchParams.get("v") === expected &&
-          !candidates.some((candidate) => candidate.id === tab.id)
-        ) {
-          candidates.push(tab);
-        }
-      } catch {
-        // Ignore tabs that changed or closed while being inspected.
+      if (
+        matches(tab) &&
+        !candidates.some((candidate) => candidate.id === tab.id)
+      ) {
+        candidates.push(tab);
       }
     }
   };
@@ -761,12 +876,12 @@ async function fetchCaptionPayloadInPage(tabId, baseUrl) {
  * the timestamped rows that YouTube renders. This uses only the active watch
  * page and closes the panel again when this function opened it.
  */
-async function getTranscriptRowsFromYouTubePanel(tabId, videoId) {
+async function getTranscriptRowsFromYouTubePanel(tabId, videoId, expectedDuration) {
   const results = await chrome.scripting.executeScript({
     target: { tabId },
     world: "MAIN",
-    args: [videoId],
-    func: async (expectedVideoId) => {
+    args: [videoId, expectedDuration],
+    func: async (expectedVideoId, videoDuration) => {
       const sleep = (milliseconds) =>
         new Promise((resolve) => setTimeout(resolve, milliseconds));
       const parseTimestamp = (value) => {
@@ -792,13 +907,26 @@ async function getTranscriptRowsFromYouTubePanel(tabId, videoId) {
           })
           .filter(Boolean)
           .slice(0, 50_000);
+      const playerMatches = () => {
+        const player = document.getElementById("movie_player");
+        return (
+          player?.getPlayerResponse?.()?.videoDetails?.videoId === expectedVideoId &&
+          new URL(location.href).searchParams.get("v") === expectedVideoId
+        );
+      };
+      const rowsFitCurrentVideo = (rows) => {
+        if (!rows.length) return false;
+        const duration = Number(videoDuration);
+        if (!Number.isFinite(duration) || duration <= 0) return true;
+        const lastStart = Number(rows[rows.length - 1]?.start) || 0;
+        return lastStart <= duration + 30;
+      };
 
       try {
-        if (new URL(location.href).searchParams.get("v") !== expectedVideoId) {
+        if (!playerMatches()) {
           return { ok: false, rows: [], error: "Active video changed" };
         }
-        let rows = collectRows();
-        if (rows.length) return { ok: true, rows };
+        let rows = [];
 
         const expand =
           document.querySelector("ytd-watch-metadata #description #expand") ||
@@ -822,10 +950,26 @@ async function getTranscriptRowsFromYouTubePanel(tabId, videoId) {
           );
         if (transcriptButton instanceof HTMLElement) transcriptButton.click();
 
-        for (let attempt = 0; attempt < 50; attempt += 1) {
+        // Never accept rows immediately after a YouTube SPA navigation. The
+        // transcript panel can retain the previous video's DOM for a short
+        // time. Require the current player identity plus a stable row set.
+        let previousFingerprint = "";
+        let stableSamples = 0;
+        for (let attempt = 0; attempt < 60; attempt += 1) {
           await sleep(100);
+          if (!playerMatches()) {
+            return { ok: false, rows: [], error: "Active video changed" };
+          }
           rows = collectRows();
-          if (rows.length) break;
+          if (!rowsFitCurrentVideo(rows)) {
+            stableSamples = 0;
+            previousFingerprint = "";
+            continue;
+          }
+          const fingerprint = `${rows.length}:${rows[0]?.start}:${rows[0]?.text}:${rows[rows.length - 1]?.start}:${rows[rows.length - 1]?.text}`;
+          stableSamples = fingerprint === previousFingerprint ? stableSamples + 1 : 1;
+          previousFingerprint = fingerprint;
+          if (stableSamples >= 3) break;
         }
 
         if (rows.length && !panelWasVisible) {
@@ -837,7 +981,7 @@ async function getTranscriptRowsFromYouTubePanel(tabId, videoId) {
             panel?.querySelector('button[aria-label*="Close" i]');
           if (closeButton instanceof HTMLElement) closeButton.click();
         }
-        return rows.length
+        return stableSamples >= 3 && rowsFitCurrentVideo(rows)
           ? { ok: true, rows }
           : { ok: false, rows: [], error: "YouTube transcript panel was unavailable" };
       } catch (error) {
@@ -1316,15 +1460,24 @@ async function handleFetchBilibiliTranscript(source) {
   };
 }
 
-async function handleFetchYouTubeTranscript(videoId) {
+async function handleFetchYouTubeTranscript(source) {
   try {
+    const videoId = YTD_PLATFORMS.cleanVideoId("youtube", source?.videoId);
     YTD_SETTINGS.canonicalYouTubeUrl(videoId);
-    const tab = await findYouTubeTabForVideo(videoId);
+    const tab = await findYouTubeTabForVideo(videoId, source?.tabId);
     if (!tab?.id) {
       return {
         success: false,
         error: "VIDEO_TAB_NOT_FOUND",
         message: "Open this video in a standard YouTube watch tab and try again.",
+      };
+    }
+    const videoDetails = await getPlayerVideoDetails(tab.id);
+    if (videoDetails?.videoId !== videoId) {
+      return {
+        success: false,
+        error: "SOURCE_MISMATCH",
+        message: "The YouTube player changed before its subtitles were read.",
       };
     }
     const tracks = await getCaptionTracksFromPlayer(tab.id, videoId);
@@ -1341,7 +1494,11 @@ async function handleFetchYouTubeTranscript(videoId) {
       ? parseYouTubeCaptionPayload(pagePayload.payload, track.languageCode)
       : [];
     if (!transcript.length) {
-      const panelResult = await getTranscriptRowsFromYouTubePanel(tab.id, videoId);
+      const panelResult = await getTranscriptRowsFromYouTubePanel(
+        tab.id,
+        videoId,
+        videoDetails.duration,
+      );
       if (panelResult.ok) {
         transcript = panelResult.rows.map((row, index, rows) => ({
           text: cleanCaptionText(row.text),
@@ -1362,7 +1519,27 @@ async function handleFetchYouTubeTranscript(videoId) {
           "YouTube did not expose transcript data to the page. Confirm captions are available, reload the video tab, and try again.",
       };
     }
-    return buildTranscriptResult(transcript, track.languageCode);
+    const finalDetails = await getPlayerVideoDetails(tab.id);
+    if (finalDetails?.videoId !== videoId) {
+      return {
+        success: false,
+        error: "SOURCE_MISMATCH",
+        message: "The YouTube player changed while its subtitles were loading.",
+      };
+    }
+    return {
+      ...buildTranscriptResult(transcript, track.languageCode),
+      videoInfo: {
+        platform: "youtube",
+        videoId,
+        pageNumber: 1,
+        contentKey: `youtube:${videoId}`,
+        title: finalDetails.title || "",
+        channelName: finalDetails.channelName || "",
+        description: finalDetails.description || "",
+        duration: Number(finalDetails.duration) || 0,
+      },
+    };
   } catch (error) {
     console.error("Transcript fetch error:", error);
     return {
@@ -1381,7 +1558,7 @@ async function handleFetchTranscript(sourceOrVideoId) {
   if (source.platform === "bilibili") {
     return handleFetchBilibiliTranscript(source);
   }
-  return handleFetchYouTubeTranscript(source.videoId);
+  return handleFetchYouTubeTranscript(source);
 }
 
 // ============================================================
@@ -1536,10 +1713,7 @@ async function handleAnalyzeTranscript(
         message: "The local Codex queue is full. Try again shortly.",
       };
     }
-    return {
-      success: false,
-      error: error.message || "Failed to analyze transcript",
-    };
+    return localAiFailure(error, "Failed to analyze transcript");
   }
 }
 
@@ -2001,10 +2175,7 @@ async function handleExplainSelection(
     };
   } catch (error) {
     console.error("Explain selection error:", error);
-    return {
-      success: false,
-      error: error.message || "Failed to explain selection",
-    };
+    return localAiFailure(error, "Failed to explain selection");
   }
 }
 
@@ -2051,10 +2222,7 @@ async function handleContextQuestion(payload) {
     };
   } catch (error) {
     console.error("Focused context question error:", error);
-    return {
-      success: false,
-      error: error.message || "Failed to answer the focused question",
-    };
+    return localAiFailure(error, "Failed to answer the focused question");
   }
 }
 
@@ -2253,7 +2421,7 @@ async function handleTranslateContent(
     return { success: true, translatedContent: aligned };
   } catch (error) {
     console.error("[YouTube Digest] Translation error:", error);
-    return { success: false, error: error.message || "Translation failed" };
+    return localAiFailure(error, "Translation failed");
   }
 }
 
@@ -2290,7 +2458,10 @@ async function callAiTranslation(
         code: "RATE_LIMITED",
       };
     }
-    return { success: false, error: error.message, code: error.code };
+    return {
+      ...localAiFailure(error, "Translation failed"),
+      code: error.code,
+    };
   }
 }
 
@@ -2307,15 +2478,19 @@ globalThis.__YTD_DIRECT_TRANSCRIPT_TESTING__ = {
   buildTranscriptResult,
   cleanCaptionText,
   decodeXmlEntities,
+  findYouTubeTabForVideo,
   fetchBilibiliSubtitlePayload,
   fetchBilibiliVideoMetadata,
   fetchCaptionPayloadInPage,
   getBilibiliSubtitleTrackFromPage,
+  getPlayerVideoDetails,
+  handleFetchYouTubeTranscript,
   normalizeBilibiliSubtitleUrl,
   getTranscriptRowsFromYouTubePanel,
   parseBilibiliSubtitle,
   parseYouTubeCaptionPayload,
   parseYouTubeJson3,
   parseYouTubeXml,
+  seekVideoInTab,
   selectCaptionTrack,
 };

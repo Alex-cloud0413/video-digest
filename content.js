@@ -151,8 +151,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "seekTo") {
     // Jump the video to a specific timestamp
     debugLog("[YouTube Digest Content] Seeking to:", message.seconds);
-    seekToTimestamp(message.seconds);
-    sendResponse({ success: true });
+    sendResponse(seekToTimestamp(message.seconds));
     return false;
   }
 
@@ -770,18 +769,30 @@ function highlightKeyMoments(moments, videoDuration) {
  * which is the standard HTML5 way to seek in a video.
  */
 function seekToTimestamp(seconds) {
-  const video = document.querySelector("video.html5-main-video");
+  const target = Number(seconds);
+  const video =
+    document.querySelector("video.html5-main-video") ||
+    [...document.querySelectorAll("video")].find((candidate) => candidate.readyState > 0) ||
+    document.querySelector("video");
+  if (!Number.isFinite(target)) {
+    return { success: false, error: "Invalid timestamp" };
+  }
   if (!video) {
     console.error("[YouTube Digest Content] No video element found for seek");
-    return;
+    return { success: false, error: "No video player found" };
   }
 
-  debugLog("[YouTube Digest Content] Seeking to:", seconds);
-  video.currentTime = seconds;
+  const duration = Number(video.duration);
+  const boundedTarget = Number.isFinite(duration) && duration > 0
+    ? Math.min(Math.max(0, target), duration)
+    : Math.max(0, target);
+  debugLog("[YouTube Digest Content] Seeking to:", boundedTarget);
+  video.currentTime = boundedTarget;
   // Also play the video if it's paused
   if (video.paused) {
     video.play().catch(() => {}); // Ignore autoplay errors
   }
+  return { success: true, seconds: boundedTarget };
 }
 
 function escapeHtmlForContent(text) {
