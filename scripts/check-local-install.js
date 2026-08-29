@@ -21,7 +21,6 @@ for (const file of [
   "sidepanel.html",
   "options.html",
   "bridge/server.js",
-  "bridge/doubaowork-applescript.js",
   "bridge/learning-pack-writer.js",
   "bridge/bridge-config.json",
   "bridge/workspace-config.json",
@@ -37,7 +36,6 @@ for (const file of [
   "sidepanel.js",
   "options.js",
   "bridge/server.js",
-  "bridge/doubaowork-applescript.js",
   "bridge/learning-pack-writer.js",
   "bridge/generate-config.js",
 ]) {

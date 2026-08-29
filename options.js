@@ -8,7 +8,7 @@ const YTD_OPTIONS = (() => {
       languageGroupLabel: "Interface language",
       heading: "Choose your local AI",
       lede:
-        "Use Codex, TraeWork, or Doubao Work inline. No provider API key is stored in the extension.",
+        "Use Codex or TraeWork inline. No provider API key is stored in the extension.",
       transcriptHeading: "Transcript source",
       transcriptProvider: "YouTube + Bilibili subtitles",
       noKeyBadge: "No key required",
@@ -18,7 +18,6 @@ const YTD_OPTIONS = (() => {
       providerLabel: "Use Video Digest with",
       codexOption: "Codex (inline results)",
       traeWorkOption: "TraeWork (inline results)",
-      doubaoWorkOption: "Doubao Work (inline results)",
       codexProvider: "Codex through your ChatGPT sign-in",
       codexBadge: "Inline results",
       codexHelp:
@@ -31,19 +30,12 @@ const YTD_OPTIONS = (() => {
         "A loopback-only helper sends each AI action to the signed-in Trae CLI 2.0 and returns the final answer to Video Digest.",
       traeWorkPrivacy:
         "Requests use your Trae account limits. The CLI runs ephemerally in a read-only sandbox with user configuration and rules ignored.",
-      doubaoWorkProvider: "Doubao Work through your signed-in desktop app",
-      doubaoWorkBadge: "Inline results via local app",
-      doubaoWorkHelp:
-        "The local helper uses macOS Apple Events to drive a dedicated minimized chat window in the signed-in Doubao Work desktop app and returns the final answer.",
-      doubaoWorkPrivacy:
-        "Requests use your Doubao Work account limits. Allow JavaScript from Apple Events in Doubao Work; no Doubao credential is stored in this extension.",
       saveProvider: "Save provider",
       providerSaved: "Provider saved.",
       checkConnection: "Check local connection",
       checking: "Checking...",
       connectedCodex: "Connected. Codex inline features are ready.",
       connectedTraeWork: "Connected. TraeWork inline features are ready.",
-      connectedDoubaoWork: "Connected. Doubao Work inline features are ready.",
       bridgeOnly: "The local helper is online, but the selected provider was not found.",
       disconnected:
         "The local helper is offline. Reload the extension after restarting the helper.",
@@ -66,7 +58,7 @@ const YTD_OPTIONS = (() => {
       pageTitle: "Video Digest",
       languageGroupLabel: "界面语言",
       heading: "选择本地 AI",
-      lede: "可在插件内使用 Codex、TraeWork 或豆包工作返回结果；插件不保存服务商 API Key。",
+      lede: "可在插件内使用 Codex 或 TraeWork 返回结果；插件不保存服务商 API Key。",
       transcriptHeading: "字幕来源",
       transcriptProvider: "YouTube + 哔哩哔哩页面字幕",
       noKeyBadge: "无需密钥",
@@ -76,7 +68,6 @@ const YTD_OPTIONS = (() => {
       providerLabel: "Video Digest 使用",
       codexOption: "Codex（结果返回插件）",
       traeWorkOption: "TraeWork（结果返回插件）",
-      doubaoWorkOption: "豆包工作（结果返回插件）",
       codexProvider: "通过 ChatGPT 登录使用 Codex",
       codexBadge: "结果返回插件",
       codexHelp:
@@ -89,19 +80,12 @@ const YTD_OPTIONS = (() => {
         "仅监听本机的连接程序会把每个 AI 操作发送给已登录的 Trae CLI 2.0，并把最终回答返回 Video Digest。",
       traeWorkPrivacy:
         "请求会占用 Trae 账号额度。CLI 使用临时会话和只读沙箱，并忽略用户配置与规则。",
-      doubaoWorkProvider: "通过已登录的豆包工作桌面端使用 AI",
-      doubaoWorkBadge: "通过本地桌面端返回结果",
-      doubaoWorkHelp:
-        "本机连接程序通过 macOS Apple Events 驱动豆包工作中的专用最小化会话窗口，并把最终回答返回插件。",
-      doubaoWorkPrivacy:
-        "请求会占用豆包工作账号额度。需在豆包工作中允许来自 Apple Events 的 JavaScript；扩展不会保存豆包登录凭据。",
       saveProvider: "保存服务",
       providerSaved: "服务已保存。",
       checkConnection: "检查本机连接",
       checking: "正在检查……",
       connectedCodex: "连接正常，Codex 插件内功能已经可用。",
       connectedTraeWork: "连接正常，TraeWork 插件内功能已经可用。",
-      connectedDoubaoWork: "连接正常，豆包工作插件内功能已经可用。",
       bridgeOnly: "本机连接程序在线，但没有找到所选服务。",
       disconnected: "本机连接程序未运行。重新启动连接程序后，请重新加载扩展。",
       localData: "本地数据",
@@ -122,7 +106,7 @@ const YTD_OPTIONS = (() => {
       languageGroupLabel: "Oberflächensprache",
       heading: "Lokale KI auswählen",
       lede:
-        "Nutze Codex, TraeWork oder Doubao Work direkt in der Erweiterung. Die Erweiterung speichert keinen Anbieter-API-Schlüssel.",
+        "Nutze Codex oder TraeWork direkt in der Erweiterung. Die Erweiterung speichert keinen Anbieter-API-Schlüssel.",
       transcriptHeading: "Transkriptquelle",
       transcriptProvider: "YouTube- und Bilibili-Untertitel",
       noKeyBadge: "Kein Schlüssel erforderlich",
@@ -132,7 +116,6 @@ const YTD_OPTIONS = (() => {
       providerLabel: "Video Digest verwenden mit",
       codexOption: "Codex (Ergebnis in der Erweiterung)",
       traeWorkOption: "TraeWork (direktes Ergebnis)",
-      doubaoWorkOption: "Doubao Work (direktes Ergebnis)",
       codexProvider: "Codex über deine ChatGPT-Anmeldung",
       codexBadge: "Direktes Ergebnis",
       codexHelp:
@@ -145,19 +128,12 @@ const YTD_OPTIONS = (() => {
         "Ein nur lokal erreichbarer Helfer sendet jede KI-Aktion an die angemeldete Trae CLI 2.0 und gibt die endgültige Antwort an Video Digest zurück.",
       traeWorkPrivacy:
         "Anfragen werden auf dein Trae-Kontingent angerechnet. Die CLI läuft sitzungsfrei in einer schreibgeschützten Sandbox; Benutzerkonfiguration und Regeln werden ignoriert.",
-      doubaoWorkProvider: "Doubao Work über die angemeldete Desktop-App",
-      doubaoWorkBadge: "Direktes Ergebnis über lokale App",
-      doubaoWorkHelp:
-        "Der lokale Helfer steuert über macOS Apple Events ein eigenes minimiertes Chatfenster in der angemeldeten Doubao-Work-App und gibt die endgültige Antwort zurück.",
-      doubaoWorkPrivacy:
-        "Anfragen werden auf dein Doubao-Work-Kontingent angerechnet. JavaScript aus Apple Events muss in Doubao Work erlaubt sein; die Erweiterung speichert keine Anmeldedaten.",
       saveProvider: "Anbieter speichern",
       providerSaved: "Anbieter gespeichert.",
       checkConnection: "Lokale Verbindung prüfen",
       checking: "Wird geprüft …",
       connectedCodex: "Verbunden. Codex-Funktionen sind direkt verfügbar.",
       connectedTraeWork: "Verbunden. TraeWork-Funktionen sind direkt verfügbar.",
-      connectedDoubaoWork: "Verbunden. Doubao-Work-Funktionen sind direkt verfügbar.",
       bridgeOnly: "Der lokale Helfer ist online, aber der gewählte Anbieter wurde nicht gefunden.",
       disconnected:
         "Der lokale Helfer ist offline. Starte ihn neu und lade anschließend die Erweiterung neu.",
@@ -197,36 +173,17 @@ const YTD_OPTIONS = (() => {
 
   function applyProvider(nextProvider) {
     selectedProvider = YTD_SETTINGS.normalize({ provider: nextProvider }).provider;
-    const providerCopy = {
-      [YTD_SETTINGS.PROVIDERS.CODEX]: {
-        name: "codexProvider",
-        badge: "codexBadge",
-        help: "codexHelp",
-        privacy: "codexPrivacy",
-      },
-      [YTD_SETTINGS.PROVIDERS.TRAEWORK]: {
-        name: "traeWorkProvider",
-        badge: "traeWorkBadge",
-        help: "traeWorkHelp",
-        privacy: "traeWorkPrivacy",
-      },
-      [YTD_SETTINGS.PROVIDERS.DOUBAOWORK]: {
-        name: "doubaoWorkProvider",
-        badge: "doubaoWorkBadge",
-        help: "doubaoWorkHelp",
-        privacy: "doubaoWorkPrivacy",
-      },
-    }[selectedProvider];
+    const isTraeWork = selectedProvider === YTD_SETTINGS.PROVIDERS.TRAEWORK;
     const select = document.getElementById("providerSelect");
     if (select) select.value = selectedProvider;
     const name = document.getElementById("providerName");
     const badge = document.getElementById("providerBadge");
     const help = document.getElementById("providerHelp");
     const privacy = document.getElementById("privacyNote");
-    if (name) name.textContent = copy(providerCopy.name);
-    if (badge) badge.textContent = copy(providerCopy.badge);
-    if (help) help.textContent = copy(providerCopy.help);
-    if (privacy) privacy.textContent = copy(providerCopy.privacy);
+    if (name) name.textContent = copy(isTraeWork ? "traeWorkProvider" : "codexProvider");
+    if (badge) badge.textContent = copy(isTraeWork ? "traeWorkBadge" : "codexBadge");
+    if (help) help.textContent = copy(isTraeWork ? "traeWorkHelp" : "codexHelp");
+    if (privacy) privacy.textContent = copy(isTraeWork ? "traeWorkPrivacy" : "codexPrivacy");
   }
 
   function applyLanguage(nextLanguage) {
@@ -271,13 +228,12 @@ const YTD_OPTIONS = (() => {
     try {
       const result = await chrome.runtime.sendMessage({ action: "checkConfig" });
       const selectedReady = result?.aiReady === true;
-      const connectedCopy = {
-        [YTD_SETTINGS.PROVIDERS.CODEX]: "connectedCodex",
-        [YTD_SETTINGS.PROVIDERS.TRAEWORK]: "connectedTraeWork",
-        [YTD_SETTINGS.PROVIDERS.DOUBAOWORK]: "connectedDoubaoWork",
-      };
       status.textContent = selectedReady
-        ? copy(connectedCopy[selectedProvider])
+        ? copy(
+            selectedProvider === YTD_SETTINGS.PROVIDERS.TRAEWORK
+              ? "connectedTraeWork"
+              : "connectedCodex",
+          )
         : copy(result?.bridgeOnline ? "bridgeOnly" : "disconnected");
       status.dataset.state = selectedReady ? "success" : "error";
     } catch {
