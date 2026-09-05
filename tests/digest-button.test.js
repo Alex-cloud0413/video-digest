@@ -238,6 +238,14 @@ test("Digest button skips a hidden responsive toolbar", () => {
   assert.equal(visibleGroup.children[1], nativeButton);
   assert.match(visibleGroup.children[0].style.cssText, /flex:\s*0 0 auto/);
   assert.match(visibleGroup.children[0].style.cssText, /width:\s*max-content/);
+  assert.match(visibleGroup.children[0].style.cssText, /background:\s*#ff0033/i);
+});
+
+test("YouTube page controls share the side-panel red accent", () => {
+  assert.match(contentScript, /const YOUTUBE_ACCENT = "#ff0033"/);
+  assert.match(contentScript, /const YOUTUBE_ACCENT_HOVER = "#cc0029"/);
+  assert.match(contentScript, /noteButton\.style\.background = YOUTUBE_ACCENT/);
+  assert.doesNotMatch(contentScript, /#c8674f|#b25742/i);
 });
 
 test("Digest button replaces stale instances and removes duplicates", () => {

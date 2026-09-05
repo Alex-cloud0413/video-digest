@@ -14,6 +14,8 @@
  */
 
 const DEBUG = false;
+const YOUTUBE_ACCENT = "#ff0033";
+const YOUTUBE_ACCENT_HOVER = "#cc0029";
 const debugLog = (...args) => {
   if (DEBUG) console.log(...args);
 };
@@ -236,7 +238,7 @@ function createDigestButton() {
     <span class="ytd-digest-label">Digest</span>
   `;
 
-  // Style the button — rounded pill in our terracotta accent, sized to sit
+  // Style the button with the same YouTube red used by the side panel.
   // comfortably among YouTube's native action buttons.
   digestButton.style.cssText = `
     display: inline-flex;
@@ -246,7 +248,7 @@ function createDigestButton() {
     height: 36px;
     border: none;
     border-radius: 18px;
-    background: #c8674f;
+    background: ${YOUTUBE_ACCENT};
     color: white;
     font-family: "Roboto", "Arial", sans-serif;
     font-size: 14px;
@@ -254,7 +256,7 @@ function createDigestButton() {
     cursor: pointer;
     margin-right: 8px;
     transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
-    box-shadow: 0 2px 8px rgba(200, 103, 79, 0.3);
+    box-shadow: 0 2px 8px rgba(255, 0, 51, 0.28);
     flex: 0 0 auto;
     align-self: center;
     width: max-content;
@@ -265,12 +267,12 @@ function createDigestButton() {
 
   // Hover effects
   digestButton.addEventListener("mouseenter", () => {
-    digestButton.style.background = "#b25742";
+    digestButton.style.background = YOUTUBE_ACCENT_HOVER;
     digestButton.style.transform = "scale(1.02)";
   });
 
   digestButton.addEventListener("mouseleave", () => {
-    digestButton.style.background = "#c8674f";
+    digestButton.style.background = YOUTUBE_ACCENT;
     digestButton.style.transform = "scale(1)";
   });
 
@@ -448,7 +450,7 @@ function injectNoteButton() {
     <span>Note</span>
   `;
 
-  // Soft rounded pill in the terracotta accent, with a gentle shadow.
+  // Rounded pill in the same YouTube red used by Digest and the side panel.
   // Start hidden; visibility is controlled by mouse activity.
   noteButton.style.cssText = `
     position: absolute;
@@ -458,7 +460,7 @@ function injectNoteButton() {
     display: flex;
     align-items: center;
     padding: 9px 16px;
-    background: #c8674f;
+    background: ${YOUTUBE_ACCENT};
     color: white;
     border: none;
     border-radius: 999px;
@@ -495,13 +497,13 @@ function injectNoteButton() {
 
   // Hover effect — lift slightly
   noteButton.addEventListener("mouseenter", () => {
-    noteButton.style.background = "#b25742";
+    noteButton.style.background = YOUTUBE_ACCENT_HOVER;
     noteButton.style.boxShadow = "0 6px 18px rgba(0,0,0,0.35)";
     noteButton.style.transform = "translateY(-1px)";
   });
 
   noteButton.addEventListener("mouseleave", () => {
-    noteButton.style.background = "#c8674f";
+    noteButton.style.background = YOUTUBE_ACCENT;
     noteButton.style.boxShadow = "0 4px 14px rgba(0,0,0,0.3)";
     noteButton.style.transform = "translateY(0)";
   });
@@ -627,7 +629,7 @@ async function saveCurrentNote() {
   setTimeout(() => {
     if (noteButton) {
       noteButton.innerHTML = originalContent;
-      noteButton.style.background = "#c8674f";
+      noteButton.style.background = YOUTUBE_ACCENT;
       noteButton.style.pointerEvents = "auto";
     }
   }, 2000);
@@ -644,11 +646,11 @@ function showNoteSavedToast(note) {
   const toast = document.createElement("div");
   toast.id = "ytd-note-toast";
   toast.innerHTML = `
-    <div style="font-weight: 700; margin-bottom: 6px; color: #c8674f;">📝 Note saved</div>
+    <div style="font-weight: 700; margin-bottom: 6px; color: ${YOUTUBE_ACCENT};">📝 Note saved</div>
     <div style="font-size: 12px; color: #6b6258; margin-bottom: 8px;">${escapeHtmlForContent(note.timestamp)} — ${escapeHtmlForContent(note.videoTitle)}</div>
     <div style="font-size: 13px; line-height: 1.55; color: #2e2a24;">"${escapeHtmlForContent(note.text)}"</div>
     <div style="margin-top: 10px; font-size: 11px;">
-      <a href="${escapeHtmlForContent(note.timestampedUrl)}" style="color: #c8674f; font-weight: 600; text-decoration: none;">🔗 Copy link</a>
+      <a href="${escapeHtmlForContent(note.timestampedUrl)}" style="color: ${YOUTUBE_ACCENT}; font-weight: 600; text-decoration: none;">🔗 Copy link</a>
     </div>
   `;
 
